@@ -834,6 +834,34 @@ def admin_dashboard(user):
 
 
 def main():
+    import database
+    if not getattr(database, "MONGO_CONNECTED", True):
+        st.markdown("""
+        <div style="background: rgba(255, 255, 255, 0.92); border: 1px solid #E3E7EF; border-radius: 16px; padding: 24px 28px; margin: 20px 0; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
+            <div style="font-size: 1.3rem; font-weight: 800; color: #1F1F1F; margin-bottom: 8px;">🔌 MongoDB Database Connection Required</div>
+            <div style="color: #5F6368; font-size: 0.92rem; line-height: 1.6; margin-bottom: 16px;">
+                VoltWay SupportAI is initialized, but cannot establish a connection to MongoDB.
+            </div>
+            <div style="background: #F8F9FC; border: 1px solid #E3E7EF; border-radius: 12px; padding: 16px 20px; font-size: 0.88rem; color: #1F1F1F;">
+                <strong>Configuring Secrets on Streamlit Community Cloud:</strong>
+                <ol style="margin: 8px 0 0 20px; padding: 0; line-height: 1.8; color: #5F6368;">
+                    <li>Open your app on <a href="https://share.streamlit.io" target="_blank" style="color: #1A73E8; font-weight: 600;">share.streamlit.io</a>.</li>
+                    <li>Click <strong>App Settings</strong> (⚙️) &rarr; <strong>Secrets</strong>.</li>
+                    <li>Paste your MongoDB Atlas URI and settings:
+                        <pre style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 8px; padding: 12px; margin-top: 8px; color: #1F1F1F; font-size: 0.82rem;">MONGO_URI = "mongodb+srv://&lt;username&gt;:&lt;password&gt;@cluster0.mongodb.net/?retryWrites=true&w=majority"
+MONGO_DB_NAME = "voltway_supportai"
+ADMIN_NAME = "Support Administrator"
+ADMIN_EMAIL = "admin@supportai.com"
+ADMIN_PASSWORD = "your_strong_password_here"
+GEMINI_API_KEY = "your_gemini_api_key_here"</pre>
+                    </li>
+                    <li>Click <strong>Save</strong> and the application will connect automatically!</li>
+                </ol>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
     if "user" not in st.session_state:
         login_screen()
         return

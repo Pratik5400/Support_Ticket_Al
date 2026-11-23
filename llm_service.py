@@ -28,6 +28,16 @@ except ImportError:
                         if k and (override or k not in os.environ):
                             os.environ[k] = v
     load_dotenv()
+# Sync Streamlit Cloud secrets to environment variables if available
+try:
+    import streamlit as st
+    if hasattr(st, "secrets"):
+        for k, v in st.secrets.items():
+            if isinstance(v, str) and k not in os.environ:
+                os.environ[k] = v
+except Exception:
+    pass
+
 API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 try:

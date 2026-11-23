@@ -35,15 +35,37 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 
 load_dotenv()
 
+# Sync Streamlit Cloud secrets to environment variables if available
+try:
+    import streamlit as st
+    if hasattr(st, "secrets"):
+        for k, v in st.secrets.items():
+            if isinstance(v, str) and k not in os.environ:
+                os.environ[k] = v
+except Exception:
+    pass
+
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "voltway_supportai")
 PBKDF2_ITERATIONS = 310_000
 
-_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
-_db = _client[MONGO_DB_NAME]
-_users = _db["users"]
-_tickets = _db["tickets"]
-_counters = _db["counters"]
+MONGO_CONNECTED = False
+MONGO_ERROR = None
+
+_client = None
+_db = None
+_users = None
+_tickets = None
+_counters = None
+
+try:
+    _client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=4000, connectTimeoutMS=4000)
+    _db = _client[MONGO_DB_NAME]
+    _users = _db["users"]
+    _tickets = _db["tickets"]
+    _counters = _db["counters"]
+except Exception as _client_err:
+    MONGO_ERROR = str(_client_err)
 
 
 def get_database():
@@ -114,6 +136,10 @@ def _provision_admin():
 
 
 def initialize_database():
+    global MONGO_CONNECTED, MONGO_ERROR
+    if _client is None:
+        MONGO_CONNECTED = False
+        return False
     try:
         _client.admin.command("ping")
         _users.create_index("id", unique=True)
@@ -122,11 +148,13 @@ def initialize_database():
         _tickets.create_index([("user_id", 1), ("id", -1)])
         _tickets.create_index([("ticket_status", 1), ("sla_due_at", 1)])
         _provision_admin()
+        MONGO_CONNECTED = True
+        MONGO_ERROR = None
+        return True
     except PyMongoError as exc:
-        raise RuntimeError(
-            "Could not connect to MongoDB. Start MongoDB Server and verify MONGO_URI "
-            "in .env. Original error: " + str(exc)
-        ) from exc
+        MONGO_CONNECTED = False
+        MONGO_ERROR = str(exc)
+        return False
 
 
 def create_user(name, email, password, role="user"):
