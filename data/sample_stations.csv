@@ -1,0 +1,8 @@
+
+station_id,station_name,city,area,charger_type,power_kw,station_status
+VLT-PUN-001,Baner Central Charging Hub,Pune,Baner,DC Fast Charger,60,Operational
+VLT-PUN-002,Hinjawadi Tech Park Hub,Pune,Hinjawadi,DC Fast Charger,120,Operational
+VLT-PUN-003,Kothrud Public Charging Point,Pune,Kothrud,AC Charger,22,Maintenance
+VLT-MUM-001,Andheri Metro Charging Hub,Mumbai,Andheri,DC Fast Charger,60,Operational
+VLT-MUM-002,Bandra Business District Hub,Mumbai,Bandra,DC Fast Charger,120,Operational
+VLT-NSK-001,Nashik Road Charging Hub,Nashik,Nashik Road,AC Charger,22,Operational
