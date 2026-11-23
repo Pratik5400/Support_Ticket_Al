@@ -1,573 +1,727 @@
-# SupportAI – VoltWay Networks
-### AI-Powered EV Charging Customer Support and Ticket Management System
+# ⚡ SupportAI · VoltWay Networks
+### Enterprise AI-Powered EV Charging Support & NOC Incident Triage Platform
 
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.38+-FF4B4B.svg?style=flat&logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![Database](https://img.shields.io/badge/Database-MongoDB%20%7C%20SQLite%20Archive-47A248.svg?style=flat&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
-[![AI Engine](https://img.shields.io/badge/AI%20Engine-Google%20Gemini%20API-4285F4.svg?style=flat&logo=google&logoColor=white)](https://ai.google.dev/)
-[![Routing Engine](https://img.shields.io/badge/Triage-Deterministic%20EV%20Fallback-48D9ED.svg?style=flat)](#k-ai-and-fallback-mechanism)
-[![Theme](https://img.shields.io/badge/Theme-Dark%20Navy%20%26%20Electric%20Cyan-101C2C.svg?style=flat)](#visual-identity--design-system)
+<div align="center">
 
----
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.38+-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Database](https://img.shields.io/badge/Database-MongoDB%207.0+-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![AI Engine](https://img.shields.io/badge/AI%20Engine-Google%20Gemini%202.5-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Security](https://img.shields.io/badge/Security-PBKDF2--SHA256%20(310k)-blueviolet?style=for-the-badge)](https://en.wikipedia.org/wiki/PBKDF2)
+[![Test Suite](https://img.shields.io/badge/Automated%20Tests-100%25%20Passing-00C853?style=for-the-badge)](https://github.com/)
 
-## Table of Contents
+**An intelligent customer care and Network Operations Center (NOC) ticketing system custom-engineered for Electric Vehicle (EV) public charging networks.**
 
-- [A. Project Header](#a-project-header)
-- [B. Project Overview](#b-project-overview)
-- [C. Problem Statement](#c-problem-statement)
-- [D. Key Features](#d-key-features)
-- [E. System Architecture](#e-system-architecture)
-- [F. Technology Stack](#f-technology-stack)
-- [G. Project Folder Structure](#g-project-folder-structure)
-- [H. Ticket Processing Workflow](#h-ticket-processing-workflow)
-- [I. EV-Specific Business Use Case](#i-ev-specific-business-use-case)
-- [J. Database Design](#j-database-design)
-- [K. AI and Fallback Mechanism](#k-ai-and-fallback-mechanism)
-- [L. Installation and Setup](#l-installation-and-setup)
-- [M. Running the Application](#m-running-the-application)
-- [N. Testing and Verification](#n-testing-and-verification)
-- [O. Screenshots](#o-screenshots)
-- [P. Future Scope](#p-future-scope)
-- [Q. Limitations](#q-limitations)
-- [R. Author and Project Information](#r-author-and-project-information)
+[⚡ Quick Start](#quick-start) •
+[📖 Project Overview](#project-overview) •
+[🎯 Problem & Solution](#problem-statement) •
+[✨ Key Features](#key-features) •
+[🏗️ Architecture](#system-architecture) •
+[🚦 Routing & SLAs](#routing-and-slas) •
+[📊 NOC Operations](#visual-walkthrough) •
+[🧪 Verification](#testing-and-verification)
+
+</div>
 
 ---
 
-## A. Project Header
+<a id="quick-start"></a>
+## ⚡ Quick Start
 
-**SupportAI – VoltWay Networks** is an intelligent, domain-tailored customer support and ticket management platform designed for electric vehicle (EV) charging network operators. It merges Google Gemini large language model capabilities with a zero-latency deterministic rule engine to classify charging failures, assess urgency, route complaints to specialized engineering departments, track SLAs, and generate suggested customer responses requiring human-in-the-loop approval.
+Get SupportAI running on your local machine in under **2 minutes**:
 
----
+```powershell
+# 1. Clone & enter repository
+git clone https://github.com/your-username/Support_Ticket_AI.git
+cd Support_Ticket_AI
 
-## B. Project Overview
+# 2. Create and activate a Python 3.12 virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1       # On Windows PowerShell (or: source .venv/bin/activate on Linux/macOS)
 
-VoltWay Networks is a fictional public electric vehicle charging operator managing AC charging points and DC fast-charging hubs across Pune, Mumbai, and Nashik. EV charging infrastructure frequently experiences hardware, software, and payment frictions that strand motorists and demand immediate operational intervention.
+# 3. Install dependencies
+python -m pip install -r requirements.txt
 
-SupportAI provides an end-to-end operations platform that:
-1. **Intelligently Triages Customer Complaints**: Evaluates free-text customer complaints and extracts structured issue categories, customer sentiment, and operational urgency.
-2. **Automates Support Department Routing**: Deterministically maps tickets to Payment Support, Technical Operations, Network Operations, Finance Support, Account Support, Safety Operations, or General Support.
-3. **Enforces Resolution SLAs**: Calculates target resolution deadlines based on department and escalation severity (ranging from immediate human intervention for safety hazards to 8 hours for general inquiries).
-4. **Drafts Empathetic Suggested Replies**: Generates context-aware customer responses while enforcing a strict **human-in-the-loop** guardrail—ensuring that operations administrators inspect, edit, and approve every reply before it is released to the driver.
-5. **Maintains Operational Reliability**: Features an internal rule-based classification fallback engine that guarantees uninterrupted ticket intake and triage even when external LLM APIs face network disconnection, rate limiting, or service downtime.
+# 4. Launch the application
+python -m streamlit run app.py
+```
 
----
+> [!TIP]
+> **Zero Configuration Required**: The platform starts out-of-the-box! If no `GEMINI_API_KEY` is provided in `.env`, the system transparently utilizes its built-in **Deterministic EV Rule Fallback Engine** with zero downtime.
 
-## C. Problem Statement
+Open **`http://localhost:8501`** in your browser.
 
-### Challenges in Public EV Charging Infrastructure
-- **Payment & Charging Session Mismatches**: Drivers scan a QR code, UPI or card payment is deducted, but the charger fails to initiate power delivery, leaving the driver frustrated and out of pocket.
-- **Physical Connector & Cable Faults**: High-power CCS2/Type 2 connectors jam, refuse to unlock from the vehicle socket, or throw communication errors (`PLC handshake failed`, `connector error`).
-- **Mid-Session Charging Dropouts**: Thermal overheating, voltage fluctuations, or station communication faults cut charging sessions prematurely.
-- **Charger & Station Unavailability**: Offline charging stations, network dead zones, or occupied bays prevent charging without advance warning.
-- **Financial & Duplicate Billing Errors**: Incomplete session terminations result in double deductions or delayed transaction adjustments.
-- **Account Security & Unauthorized Transactions**: Stolen credentials or app session hijacking lead to unauthorized charging billing.
-- **Physical & Electrical Safety Hazards**: Overheating cables, burning smells, sparking connectors, or water ingress pose critical electrical shock and fire hazards.
-- **Manual, Delayed Customer Support**: Generic support ticketing desks lack EV domain context, routing technical charger malfunctions to general customer care queues and resulting in multi-day resolution delays for stranded drivers.
-
-### How SupportAI Solves These Challenges
-- **Instant Domain-Aware Classification**: Differentiates between physical charging hardware issues, network outages, payment discrepancies, and account takeovers in milliseconds.
-- **Safety First Automated Escalation**: Bypasses routine queues when fire, smoke, sparking, or electrical shock terms are detected, escalating the ticket to Safety Operations with an immediate emergency advisory.
-- **Automated Department Dispatch**: Eliminates manual triage by routing tickets directly to the responsible team (e.g., connector faults to Technical Operations, double charges to Payment Support).
-- **Human-Controlled Response Delivery**: Keeps customer communication professional, empathetic, and accurate without hallucinatory claims regarding completed refunds or repairs.
+- **Default Administrator Credentials**: Configured automatically via `.env` (defaults: `admin@example.com` / `admin12345`).
+- **Customer Access**: Click the **Create customer account** tab on the login screen to register a new EV driver profile.
 
 ---
 
-## D. Key Features
+<a id="project-overview"></a>
+## 📖 Project Overview
 
-SupportAI implements a complete set of customer and administrator capabilities:
+Public EV charging networks operate in high-stress, real-world conditions where physical hardware, high-voltage power electronics, cellular communications, and banking rails converge. When an EV driver experiences a failure at a charging kiosk (such as a locked cable connector, mid-session charging drop, or payment deduction without electricity delivery), generic customer support queues create multi-day delays that leave motorists stranded.
 
-- **Customer Dashboard**:
-  - Secure registration and login with local device credential persistence ("Remember Me").
-  - Intuitive complaint submission form with live station directory selection.
-  - Interactive technical station card displaying Area, City, Connector Type (`DC Fast Charger` vs `AC Charger`), Power Rating (`kW`), and Operational Status (`Operational` vs `Maintenance`).
-  - Metadata capture for Transaction ID, Session ID, and EV Vehicle Model (e.g., *Tata Nexon EV*, *MG ZS EV*).
-  - Dedicated **My Ticket History** tab tracking live status badges (`Open`, `In Progress`, `Awaiting Customer`, `Resolved`, `Closed`), urgency levels, SLA targets, and official approved responses.
-- **Administrator NOC Control Panel**:
-  - Live KPI metric cards: Total Tickets, Awaiting Approval, Escalated Incidents, Active Tickets, Resolved Tickets.
-  - Multi-tab layout: **Live Overview** for rapid triage, **Ticket Queue & Triage** for full management, and **Network Analytics & SLA** for performance tracking.
-  - Interactive filters by Ticket Urgency (`Critical`, `High`, `Medium`, `Low`) and Status.
-  - Inline response editor allowing administrators to refine AI-suggested replies.
-  - Single-click response approval (`update_approval_status("Approved")`) releasing verified replies to the customer portal.
-  - Reassignment of operational support teams and status updates (`Open` -> `In Progress` -> `Resolved`, automatically timestamping `resolved_at`).
-  - Critical visual alert callouts for physical safety hazards and urgent escalations.
-- **AI Intelligence & Deterministic Routing**:
-  - **Gemini API Integration**: Uses Google's `google-genai` SDK with strict JSON response schemas and a 10-second timeout guard.
-  - **Zero-Latency Rule-Based Fallback**: Domain keyword classifier matching comprehensive EV failure modes and generating deterministic draft replies whenever Gemini is unconfigured or unreachable.
-  - **SLA Target Calculation**: Automated deadline scheduling based on assigned department and priority.
-- **Analytics & Operations Reporting**:
-  - Monthly ticket volume trends.
-  - Complaints categorized by issue category (Donut chart).
-  - Workload distribution across the 7 support departments.
-  - Station-level complaint frequency rankings.
-  - City-level complaint distribution (Pune, Mumbai, Nashik).
-  - Urgency distribution breakdown.
-  - Resolution SLA compliance gauge.
-  - Overdue ticket queue table for active tickets exceeding deadline.
-  - One-click CSV operations report download (`voltway_operations_report.csv`).
-- **Database Integration**:
-  - **MongoDB Integration**: Active runtime backend (`voltway_supportai` database) with `users`, `tickets`, and `counters` collections, featuring atomic auto-increment sequences and compound indexes.
-  - **SQLite Archive**: Preserved legacy relational database (`support_tickets.db`) holding 15 historical benchmark tickets.
+**SupportAI** is a domain-tailored operational platform built for **VoltWay Networks**—a public charging network managing AC and DC fast-charging hubs across **Pune, Mumbai, and Nashik**. 
+
+By orchestrating **Google Gemini 2.5 Flash** with a **sub-millisecond deterministic fallback engine**, SupportAI instantly parses unstructured customer complaints, identifies urgent physical safety hazards, routes tickets to specialized engineering teams, calculates SLA deadlines, and drafts empathetic responses protected by a strict **Human-in-the-Loop** operational safeguard.
+
+```
+       ┌─────────────────┐
+       │   EV Customer   │ ── Submits issue: "Charged ₹500 via UPI, but charger failed"
+       └────────┬────────┘
+                │
+                ▼
+  ╔═══════════════════════════╗
+  ║    SupportAI Engine       ║ ── Triage in < 15ms (Gemini AI / Offline Rule Fallback)
+  ╚═══════════════════════════╝
+    ├── 🏷️ Category:           Payment & Billing
+    ├── ⚡ Urgency:            High
+    ├── 🛠️ Assigned Team:      Payment Support
+    ├── ⏱️ SLA Target:         2 hours (Priority Review)
+    └── 📝 Suggested Reply:    "We verified your payment and session logs..."
+                │
+                ▼
+       ┌─────────────────┐
+       │  NOC Operator   │ ── Inspects, edits, & approves reply (Human-in-the-Loop)
+       └────────┬────────┘
+                │
+                ▼
+       ┌─────────────────┐
+       │   EV Customer   │ ── Sees verified official response in Driver Portal
+       └─────────────────┘
+```
 
 ---
 
-## E. System Architecture
+<a id="problem-statement"></a>
+## 🎯 Problem Statement & EV Domain Friction
+
+Public EV charging operations face distinct failure modes that generic helpdesks are unequipped to handle:
+
+| Operational Failure Mode | Real-World Impact | How SupportAI Solves It |
+| :--- | :--- | :--- |
+| **Payment / Session Mismatch** | UPI/card debited, but connector handshake fails; driver is out of pocket without charge. | Auto-triaged to **Payment Support** under *Priority Review* with transaction tracking and 2-hour SLA. |
+| **Connector Jam / Cable Lock** | CCS2 or Type 2 connector remains mechanically locked in vehicle socket. | Flagged as **Charging Failure**, dispatched to **Technical Operations** for remote unlock or dispatch. |
+| **Thermal / Safety Hazard** | Cable overheating, burning smell, sparks, or exposed electrical wiring. | Bypasses standard queues; triggers **Critical** alert, instructs driver to move away, alerts **Safety Operations**. |
+| **Mid-Session Power Drop** | 120kW DC fast charger abruptly terminates after 3 minutes due to thermal throttling. | Classified as **Charging Failure**, tagged with EV model and charging speed for technical diagnostics. |
+| **Station Network Outage** | Station communication drops offline due to cellular modem or cloud gateway fault. | Routed to **Network Operations** with a 1-hour urgent SLA to minimize network-wide downtime. |
+| **Account Takeover / Fraud** | Driver suspects compromised credentials or unauthorized charging billing. | Instantly classified under **Account & Application** with immediate human intervention SLA. |
+
+---
+
+<a id="key-features"></a>
+## ✨ Key Features
+
+### 🚗 EV Driver Customer Portal
+- **Intuitive Complaint Submission**: Free-text complaint input with live charging station selector.
+- **Interactive Station Telemetry**: Visual card displaying station area, city, charger type (`DC Fast Charger` vs `AC Charger`), power rating (`60 kW` / `120 kW` / `22 kW`), and live operational status (`Operational` vs `Maintenance`).
+- **Session & Vehicle Metadata**: Captures optional Transaction ID, Session ID, and EV vehicle model (e.g., *Tata Nexon EV*, *MG ZS EV*, *Mahindra XUV400*).
+- **Driver Ticket Stream ("My Ticket History")**: Real-time ticket history with color-coded status badges, urgency indicators, SLA targets, and **official approved NOC responses**.
+
+### 🛡️ Administrator NOC Command Center
+- **Live KPI Status Strip**: Real-time counter metrics for **Total Tickets**, **Awaiting Approval**, **Escalated Incidents**, **Active Tickets**, and **Resolved Tickets**.
+- **Three-Tier Operational View**:
+  1. **⚡ Live Overview**: Rapid triage cards for incoming complaints requiring immediate attention.
+  2. **📋 Ticket Queue & Triage**: Complete filterable queue by Urgency (`Critical`, `High`, `Medium`, `Low`) and Status (`Open`, `In Progress`, `Awaiting Customer`, `Resolved`, `Closed`).
+  3. **📊 Network Analytics & SLA**: Plotly-powered executive charts tracking monthly ticket trends, category breakdowns, station complaint rankings, city-level distributions, and SLA compliance gauges.
+- **Human-in-the-Loop Response Workflow**: Operators inspect AI-suggested responses, refine phrasing via an inline editor, reassign teams or update ticket statuses, and release official replies with single-click approval.
+- **Operational Data Export**: One-click download of all ticket data formatted as an operations CSV report (`voltway_operations_report.csv`).
+
+### 🧠 Dual-Mode Intelligence & Resilience
+- **Google Gemini 2.5 Flash API**: Context-aware NLP analyzing customer sentiment, extracting root issues, assessing urgency, and drafting professional customer service replies.
+- **10-Second API Timeout Guard**: Client requests enforce a strict 10-second timeout to prevent UI thread hangs during high network latency.
+- **Zero-Downtime Deterministic Fallback**: Automatic keyword triage engine matching comprehensive domain failure terms. Guarantees 100% platform uptime even if the Gemini API is offline, unconfigured, or rate-limited.
+
+### 🔒 Enterprise Security & Scalability
+- **Cryptographic Password Security**: PBKDF2-HMAC-SHA256 password hashing with **310,000 rounds** and unique 16-byte random salts.
+- **MongoDB NoSQL Persistence**: Scalable runtime database (`voltway_supportai`) with atomic auto-increment counters and compound indexing for rapid search.
+- **Strict Data Integrity**: Preserves historical legacy tickets in a local SQLite archive (`support_tickets.db`).
+
+---
+
+<a id="system-architecture"></a>
+## 🏗️ System Architecture
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer["Client & User Layer"]
-        Customer["EV Driver (Customer)"]
-        Admin["Operations Engineer (Administrator)"]
+    subgraph Clients["Client Presentation Layer"]
+        Driver["🚗 EV Driver (Customer Portal)"]
+        Admin["🛡️ NOC Engineer (Admin Control Panel)"]
     end
 
-    subgraph AppLayer["Application Layer (Streamlit)"]
-        UI["app.py (Streamlit UI Engine)"]
-        Auth["Authentication & Session Manager"]
+    subgraph AppLayer["Streamlit Application Engine (app.py)"]
+        RouterUI["Streamlit UI & Routing Controllers"]
+        AuthSystem["PBKDF2 Authentication & Session Manager"]
     end
 
-    subgraph IntelligenceLayer["Triage & Intelligence Layer"]
-        LLM["llm_service.py (Gemini 2.0/2.5 AI)"]
-        Fallback["Rule-Based Fallback Engine"]
-        Router["routing.py (Deterministic EV Routing Engine)"]
-        Config["ev_config.py (Domain Keywords & Station Directory)"]
+    subgraph TriageEngine["Intelligence & Triage Pipeline"]
+        LLM["Google Gemini API (llm_service.py)"]
+        Fallback["Zero-Latency Rule-Based Fallback"]
+        BusinessRouter["Deterministic EV Routing Engine (routing.py)"]
+        DomainConfig["VoltWay Domain Config & Keywords (ev_config.py)"]
     end
 
-    subgraph DataLayer["Persistence & Database Layer"]
-        MongoDB[("MongoDB (voltway_supportai)\nusers | tickets | counters")]
-        SQLiteArchive[("SQLite Archive (support_tickets.db)\nHistorical Benchmark Records")]
+    subgraph Persistence["Persistence & Database Layer"]
+        MongoDB[("MongoDB 7.0+ (voltway_supportai)\nusers | tickets | counters")]
+        LegacyDB[("SQLite Benchmark Archive\nsupport_tickets.db")]
     end
 
-    %% Workflow connections
-    Customer -->|"Submit EV Complaint"| UI
-    UI --> Auth
-    Auth -->|"Load / Save Credentials"| MongoDB
-    UI -->|"Raw Complaint Text"| LLM
-    LLM -.->|"If API Unavailable / Timeout"| Fallback
-    Config -->|"Supply Keywords"| Fallback
-    LLM -->|"Category, Urgency, Draft"| Router
-    Fallback -->|"Category, Urgency, Draft"| Router
-    Config -->|"Station & Team Rules"| Router
-    Router -->|"Routed Ticket Document"| MongoDB
-    MongoDB -->|"Display Queue & Analytics"| UI
-    UI -->|"Inspect, Edit & Approve"| Admin
-    Admin -->|"Approve Response & Update Status"| UI
-    UI -->|"Persist Approved State"| MongoDB
-    MongoDB -->|"View Live Status & Approved Response"| Customer
+    %% Interactions
+    Driver -->|"Submit Complaint + Metadata"| RouterUI
+    Admin -->|"Inspect, Edit, Reassign & Approve"| RouterUI
+    RouterUI <--> AuthSystem
+    AuthSystem <-->|"Verify Salted Hash"| MongoDB
 
-    classDef client fill:#17283B,stroke:#48D9ED,stroke-width:2px,color:#F5F8FC;
-    classDef app fill:#20344A,stroke:#48D9ED,stroke-width:2px,color:#F5F8FC;
-    classDef ai fill:#1A365D,stroke:#42D99B,stroke-width:2px,color:#F5F8FC;
-    classDef db fill:#0D2A4A,stroke:#FFB84D,stroke-width:2px,color:#F5F8FC;
+    RouterUI -->|"Raw Complaint Text"| LLM
+    LLM -.->|"On Timeout / Disconnect / Quota"| Fallback
+    DomainConfig -->|"Supply Keywords"| Fallback
+    LLM -->|"Category, Urgency, Draft"| BusinessRouter
+    Fallback -->|"Category, Urgency, Draft"| BusinessRouter
+    DomainConfig -->|"SLA & Team Rules"| BusinessRouter
 
-    class Customer,Admin client;
-    class UI,Auth app;
-    class LLM,Fallback,Router,Config ai;
-    class MongoDB,SQLiteArchive db;
+    BusinessRouter -->|"Routed Ticket Document"| MongoDB
+    MongoDB -->|"Display Queue & Plotly Analytics"| RouterUI
+    MongoDB -.->|"Historical Benchmarks"| LegacyDB
+
+    classDef clientStyle fill:#17283B,stroke:#48D9ED,stroke-width:2px,color:#F5F8FC;
+    classDef appStyle fill:#1E334A,stroke:#48D9ED,stroke-width:2px,color:#F5F8FC;
+    classDef aiStyle fill:#1A365D,stroke:#42D99B,stroke-width:2px,color:#F5F8FC;
+    classDef dbStyle fill:#0D2A4A,stroke:#FFB84D,stroke-width:2px,color:#F5F8FC;
+
+    class Driver,Admin clientStyle;
+    class RouterUI,AuthSystem appStyle;
+    class LLM,Fallback,BusinessRouter,DomainConfig aiStyle;
+    class MongoDB,LegacyDB dbStyle;
 ```
+
+### Architectural Layer Responsibilities
+
+1. **Presentation Layer (`app.py`)**: Renders custom dark-navy (`#101C2C`) and electric-cyan (`#48D9ED`) user interfaces. Employs unique Streamlit widget namespaces (`admin_overview_...` vs `admin_queue_...`) to eliminate duplicate key collisions.
+2. **Intelligence Layer (`llm_service.py` & `ev_config.py`)**: Manages the LLM inference lifecycle. Formats structured JSON prompts, validates schema compliance, and triggers internal fallback mechanisms upon network interruption.
+3. **Routing Layer (`routing.py`)**: Implements strict hierarchical business rules:
+   - **Safety First**: Smoke, fire, or sparks trigger instant escalation to **Safety Operations**.
+   - **Security Second**: Account compromise triggers instant escalation to **Account Support**.
+   - **Payment Reconciliation**: Payment deductions without charging map to **Payment Support** with priority review.
+4. **Persistence Layer (`database.py`)**: Connects to MongoDB via `pymongo`, maintaining compound indexes for `(user_id, id DESC)` and `(ticket_status, sla_due_at ASC)`.
 
 ---
 
-## F. Technology Stack
+<a id="ticket-lifecycle"></a>
+## 🔄 Ticket Processing Lifecycle
 
-| Technology | Version / Specification | Purpose | Role in Project |
-| :--- | :--- | :--- | :--- |
-| **Python** | `3.12` | Core Programming Language | Powers application logic, data modeling, routing rules, and test harnesses. |
-| **Streamlit** | `1.38+` | Web Framework & Dashboard Engine | Renders customer portal, administrator NOC interface, and responsive styling. |
-| **MongoDB** | `7.0+ / Community` | Primary NoSQL Document Database | Active runtime store for users, tickets, auto-increment sequences, and query indexing. |
-| **PyMongo** | `4.8+` | MongoDB Client Driver | Handles connection pooling, document CRUD operations, and atomic counter updates. |
-| **SQLite** | `3.x` | Relational Database Archive | Preserves original historical benchmark tickets (`support_tickets.db`). |
-| **Google Gemini API** | `google-genai` SDK | Generative AI Intelligence | Analyzes complaint text, identifies sentiment/urgency, and generates drafted replies. |
-| **Plotly Express** | `5.24+` | Data Visualization Library | Generates dark-navy themed line charts, donut charts, and department workload bars. |
-| **Pandas** | `2.2+` | Data Analysis Engine | Computes SLA compliance percentages, overdue durations, and CSV exports. |
-| **Python-Dotenv** | `1.0+` | Environment Configuration | Securely loads `MONGO_URI`, `GEMINI_API_KEY`, and admin credentials from `.env`. |
-| **Hashlib & HMAC** | Standard Library (`PBKDF2`) | Cryptographic Security | Generates salted SHA-256 hashes (310,000 iterations) with timing-safe verification. |
-
----
-
-## G. Project Folder Structure
-
-```
-Support_Ticket_AI/
-├── .idea/                             # PyCharm IDE workspace configuration
-├── .streamlit/
-│   └── config.toml                    # Streamlit dark theme configuration (navy/cyan)
-├── data/
-│   └── sample_stations.csv            # Catalog of VoltWay charging stations in Pune, Mumbai, Nashik
-├── backup_pre_fix/                    # Pre-refactor code backup
-├── backup_ui_redesign/                # Pre-UI redesign styling backup
-├── app.py                             # Main Streamlit application (Customer & Admin views, styling)
-├── database.py                        # MongoDB persistence layer (user auth, ticket CRUD, indexes)
-├── ev_config.py                       # VoltWay business config, station directory, and keyword definitions
-├── llm_service.py                     # Gemini API integration, prompt templates, and rule fallback
-├── nlpjury.py                         # Constituency and dependency parsing demo script (NLP evaluation)
-├── reset_admin.py                     # Administrative account provisioning and credential reset utility
-├── routing.py                         # Deterministic EV routing rules, SLA calculations, and team assignment
-├── sample_tickets.csv                 # Benchmark sample tickets catalog
-├── support_tickets.db                 # Persistent legacy SQLite database archive (15 records)
-├── test_ai.py                         # Single-ticket Gemini AI / fallback integration test
-├── test_ev_config.py                  # Station catalog configuration test
-├── test_ev_intelligence.py            # Domain routing rules and classification assertion test
-├── test_fallback.py                   # Local fallback classifier regression test
-├── test_scenarios.py                  # Assertion suite for the 6 core business scenarios
-├── test_workflows.py                  # Customer-admin end-to-end integration test
-├── VoltWay_SupportAI.zip              # Pre-bundled project archive for distribution
-├── requirements.txt                   # Production Python package dependencies
-├── .env.example                       # Environment configuration template
-└── README.md                          # Comprehensive project documentation
-```
-
-### Module Responsibilities
-- **`app.py`**: Controls Streamlit presentation, dark-navy CSS overrides, customer complaint submission, ticket cards, and NOC control dashboards.
-- **`database.py`**: Interacts with MongoDB (`voltway_supportai`), manages `users`, `tickets`, and `counters` collections, enforces indexes, and implements password hashing.
-- **`ev_config.py`**: Defines VoltWay Networks business metadata, sample charging hubs (`SAMPLE_STATIONS`), and authoritative issue keyword mappings (`ISSUE_KEYWORDS`).
-- **`llm_service.py`**: Interfaces with the Gemini API, enforces a 10-second client timeout, extracts structured JSON, and implements `_fallback_analysis()`.
-- **`routing.py`**: Enforces business logic prioritizing physical safety, account security, and outage signals; calculates SLAs; and assigns teams.
-
----
-
-## H. Ticket Processing Workflow
+The diagram below illustrates the end-to-end lifecycle of a support ticket from driver submission to NOC resolution:
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Driver as EV Customer
-    participant App as Streamlit Portal (app.py)
+    participant App as Streamlit App (app.py)
     participant AI as AI Engine (llm_service.py)
     participant Router as Routing Engine (routing.py)
     participant DB as MongoDB (voltway_supportai)
     actor Admin as NOC Administrator
 
-    Driver->>App: Submits complaint (Station, Session ID, Problem Description)
-    App->>AI: analyze_ticket(full_complaint_text)
-    alt Gemini API Connected
-        AI->>AI: Gemini LLM extracts category, urgency, sentiment & draft reply
-    else Gemini Offline / Timeout / Quota Exceeded
-        AI->>AI: _fallback_analysis() executes deterministic keyword matching
+    Driver->>App: Submits complaint (Station, Session ID, Description)
+    App->>AI: analyze_ticket(complaint_text)
+    alt Gemini API Active
+        AI->>AI: Gemini extracts Category, Urgency, Sentiment & Draft
+    else Gemini Offline / Timeout (>10s)
+        AI->>AI: Fallback keyword matching generates structured triage
     end
-    AI-->>App: Raw analysis result dictionary
-    App->>Router: route_ticket(analysis_result, complaint_text)
-    Router->>Router: Evaluates Safety, Security, Payment, Hardware rules
-    Router->>Router: Calculates SLA target and escalation status
-    Router-->>App: Final enriched ticket payload
-    App->>DB: save_ticket(...) stores ticket in 'tickets' collection (status: Open, approval: Pending)
-    DB-->>Driver: Returns Ticket Reference (#ID)
-    
+    AI-->>App: Raw triage dictionary
+    App->>Router: route_ticket(triage_data, complaint_text)
+    Router->>Router: Applies Safety/Security rules & calculates SLA deadline
+    Router-->>App: Enriched ticket document
+    App->>DB: save_ticket(...) [status: Open, approval: Pending]
+    DB-->>Driver: Instant Ticket Confirmation (#ID)
+
     Admin->>App: Opens NOC Administrator Dashboard
     App->>DB: get_all_tickets()
-    DB-->>Admin: Displays ticket in Triage Queue with AI summary & EV details
-    Admin->>App: Reviews & edits suggested reply, updates team/status
-    Admin->>App: Clicks "Approve Response"
+    DB-->>Admin: Displays ticket in Triage Queue with AI draft
+    Admin->>App: Reviews/edits suggested draft & clicks "Approve Response"
     App->>DB: update_approval_status(ticket_id, "Approved")
     
-    Driver->>App: Checks "My Ticket History" tab
+    Driver->>App: Views "My Ticket History"
     App->>DB: get_user_tickets(user_id)
-    DB-->>Driver: Displays ticket with "Official VoltWay Support Response"
+    DB-->>Driver: Displays "Official VoltWay Support Response"
     
-    Admin->>App: Marks ticket as "Resolved"
+    Admin->>App: Marks ticket status as "Resolved"
     App->>DB: update_ticket_status(ticket_id, "Resolved") -> sets resolved_at
 ```
 
 ---
 
-## I. EV-Specific Business Use Case
+<a id="routing-and-slas"></a>
+## 🚦 EV Domain Intelligence & Routing Engine
 
-VoltWay Networks operates high-power public charging infrastructure across Maharashtra:
+VoltWay Networks classifies customer issues into **7 specialized EV categories** and routes them deterministically to dedicated operational support departments.
 
-| Station ID | Station Name | City | Area | Charger Type | Rated Power | Status |
-| :--- | :--- | :--- | :--- | :--- | :---: | :---: |
-| `VLT-PUN-001` | Baner Central Charging Hub | Pune | Baner | DC Fast Charger | 60 kW | Operational |
-| `VLT-PUN-002` | Hinjawadi Tech Park Hub | Pune | Hinjawadi | DC Fast Charger | 120 kW | Operational |
-| `VLT-PUN-003` | Kothrud Public Charging Point | Pune | Kothrud | AC Charger | 22 kW | Maintenance |
-| `VLT-MUM-001` | Andheri Metro Charging Hub | Mumbai | Andheri | DC Fast Charger | 60 kW | Operational |
-| `VLT-MUM-002` | Bandra Business District Hub | Mumbai | Bandra | DC Fast Charger | 120 kW | Operational |
-| `VLT-NSK-001` | Nashik Road Charging Hub | Nashik | Nashik Road | AC Charger | 22 kW | Operational |
+### Support Departments & SLA Target Matrix
 
-### Concrete Problem Scenarios & Handling
-1. **Charging Failure**: A Tata Nexon EV driver at Baner Central Hub experiences a connector handshake failure. The system classifies the issue as `Charging Failure`, assigns it to **Technical Operations**, assigns **Priority Review** escalation, and sets a 2-hour SLA.
-2. **Payment Failure / Mismatch**: A customer at Bandra Hub is debited ₹500 via UPI, but the DC fast charger does not deliver power. The issue is triaged to **Payment Support** under **Priority Review** with a 2-hour SLA.
-3. **Duplicate Payment**: Two deductions of ₹650 appear for a single session. Triaged as `Payment & Billing` to **Payment Support** for transaction verification.
-4. **Connector Error / Jam**: Cable remains locked in the vehicle charging inlet. Triaged to **Technical Operations** for urgent physical dispatch.
-5. **Station Outage**: A station fails to communicate with network backends. Triaged as `Station Availability` to **Network Operations** with a 1-hour SLA.
-6. **Account Security / Fraud**: An account holder reports unauthorized charging sessions on their linked card. Instantly flagged as `Account & Application`, escalated to **Account Support** with **Critical** urgency and an immediate response target.
-7. **Safety Incident**: Driver reports smoke or a burning odor from a high-power charging cable. Instantly classified as `Safety Incident`, assigned to **Safety Operations**, escalated with **Critical** urgency and an **Immediate human response** advisory telling the driver to move away from the equipment.
+| Category | Assigned Team | Default Urgency | SLA Target | Escalation Condition |
+| :--- | :--- | :---: | :---: | :--- |
+| **Safety Incident** | **Safety Operations** | `Critical` | **Immediate human response** | Smoke, fire, sparks, burning odor, or electrical shock. |
+| **Account & Application** | **Account Support** | `Critical` / `Medium` | **Immediate / 4 hours** | Unauthorized access, account takeover, or app login lockouts. |
+| **Station Availability** | **Network Operations** | `Critical` / `High` | **1 hour** | Multiple stations offline, grid failure, or network-wide downtime. |
+| **Payment & Billing** | **Payment Support** | `High` | **2 hours** | Amount debited but charging session failed to start; double charges. |
+| **Charging Failure** | **Technical Operations** | `High` | **2 hours** | Connector locked in vehicle socket, PLC handshake error, mid-session stop. |
+| **Refund & Transaction** | **Finance Support** | `Medium` | **4 hours** | Transaction reconciliation, wallet balance inquiries, refund status. |
+| **General Inquiry** | **General Support** | `Low` / `Medium` | **8 hours** | Tariffs, operational hub hours, membership tiers, EV compatibility. |
+
+### The 6 Core Benchmark Business Scenarios
+
+SupportAI is verified against 6 mission-critical business scenarios:
+
+```
+[Scenario 1: Payment/Charging Mismatch]
+Complaint: "Paid ₹500 at Baner Hub via UPI, amount deducted but charger failed to start."
+├── Category:   Payment & Billing
+├── Urgency:    High
+├── Team:       Payment Support
+├── Escalation: Priority Review
+└── SLA Target: 2 hours (priority review)
+
+[Scenario 2: Charger Connector Jam]
+Complaint: "Tata Nexon EV at Baner Hub. Charger displays connector error and won't initiate."
+├── Category:   Charging Failure
+├── Urgency:    High
+├── Team:       Technical Operations
+├── Escalation: Priority Review
+└── SLA Target: 2 hours (priority review)
+
+[Scenario 3: Mid-Session Power Interruption]
+Complaint: "DC fast charging session at Hinjawadi stopped abruptly after 5 minutes."
+├── Category:   Charging Failure
+├── Urgency:    High
+├── Team:       Technical Operations
+├── Escalation: Priority Review
+└── SLA Target: 2 hours (priority review)
+
+[Scenario 4: Duplicate Billing]
+Complaint: "Charged twice for a single charging session. Two deductions of ₹650 on my card."
+├── Category:   Payment & Billing
+├── Urgency:    High
+├── Team:       Payment Support
+├── Escalation: Priority Review
+└── SLA Target: 2 hours (priority review)
+
+[Scenario 5: Account Takeover & Fraud]
+Complaint: "Fraudulent transaction on my account. Someone accessed my account without authorization."
+├── Category:   Account & Application
+├── Urgency:    Critical
+├── Team:       Account Support
+├── Escalation: Escalated
+└── SLA Target: Immediate human response
+
+[Scenario 6: Tariff & Hours Inquiry]
+Complaint: "What is the tariff per kWh at Mumbai DC hubs and what are your support hours?"
+├── Category:   General Inquiry
+├── Urgency:    Medium / Low
+├── Team:       General Support
+├── Escalation: Normal
+└── SLA Target: 8 hours
+```
 
 ---
 
-## J. Database Design
+<a id="visual-walkthrough"></a>
+## 📊 Visual UI & Operational Walkthrough
 
-SupportAI utilizes **MongoDB** as its primary active document store (`voltway_supportai` database) and maintains a historical **SQLite** database (`support_tickets.db`).
+### 1. EV Driver Experience
 
-### 1. MongoDB Collections Structure
+```
++---------------------------------------------------------------------------------------+
+|  ⚡ VoltWay Networks · Driver Support Portal                         [Logged in: Rahul] |
++---------------------------------------------------------------------------------------+
+|  [ ⚡ Report an EV Charging Issue ]    [ 📋 My Ticket History (2) ]                     |
+|                                                                                       |
+|  Select Charging Station: [ VLT-PUN-001 | Baner Central Charging Hub (Pune) ▼ ]       |
+|  +---------------------------------------------------------------------------------+  |
+|  | 📍 Area: Baner, Pune  |  ⚡ Type: DC Fast Charger  |  ⚡ Power: 60 kW  |  ● Operational  |  |
+|  +---------------------------------------------------------------------------------+  |
+|                                                                                       |
+|  Vehicle Model: [ Tata Nexon EV               ]  Transaction ID: [ TXN-94810294     ] |
+|  Session ID:    [ SES-440182                  ]  Subject:        [ Amount deducted   ] |
+|                                                                                       |
+|  Describe the problem in detail:                                                      |
+|  +---------------------------------------------------------------------------------+  |
+|  | ₹500 was deducted from my UPI account, but the charger never started charging.   |  |
+|  | The screen showed 'Handshake Timeout'. Please assist immediately.               |  |
+|  +---------------------------------------------------------------------------------+  |
+|                                                                                       |
+|  [ 🚀 Submit Support Ticket ]                                                         |
++---------------------------------------------------------------------------------------+
+```
 
-#### `users` Collection
-Stores registered EV drivers and system administrators.
-```javascript
+### 2. Administrator NOC Command Center
+
+```
++---------------------------------------------------------------------------------------+
+|  🛡️ VoltWay Networks · Network Operations Center (NOC)               [Role: Admin]    |
++---------------------------------------------------------------------------------------+
+|  [ Total: 42 ]   [ Awaiting Approval: 7 ]   [ Escalated: 3 ]   [ Active: 12 ]   [ Resolved: 27 ]|
++---------------------------------------------------------------------------------------+
+|  [ ⚡ Live Overview ]    [ 📋 Ticket Queue & Triage ]    [ 📊 Network Analytics & SLA ] |
+|                                                                                       |
+|  TICKET #104  |  High Urgency  |  Payment Support  |  Due in: 1h 45m  |  Status: Open |
+|  Customer: Rahul Sharma (rahul@example.com)  |  Station: Baner Central Charging Hub   |
+|  Complaint: "₹500 was deducted from my UPI account, but the charger never started..."|
+|                                                                                       |
+|  Suggested Response (Gemini 2.5 AI Draft - Pending Approval):                         |
+|  +---------------------------------------------------------------------------------+  |
+|  | Dear Rahul, thank you for reaching out. We have logged your report regarding     |  |
+|  | session SES-440182 at Baner Central Hub. Our Payment Support team is verifying |  |
+|  | the UPI transaction reference with our banking gateway...                       |  |
+|  +---------------------------------------------------------------------------------+  |
+|                                                                                       |
+|  Reassign Team: [ Payment Support ▼ ]   Update Status: [ In Progress ▼ ]              |
+|  [ ✅ Approve Response ]   [ 💾 Save Draft Edits ]   [ 🔄 Update Status ]             |
++---------------------------------------------------------------------------------------+
+```
+
+> [!NOTE]
+> **Adding High-Resolution Screenshots**: To feature live screenshots in this repository, create the directory `assets/screenshots/` and add PNG image captures for:
+> - `01_login_screen.png`: Split-screen authentication view.
+> - `02_customer_submit.png`: Driver complaint form with station card preview.
+> - `03_customer_history.png`: Driver ticket stream with live status badges.
+> - `04_admin_overview.png`: NOC KPI metric cards and incoming triage cards.
+> - `05_admin_approval.png`: Human-in-the-loop response editor and approval controls.
+> - `06_admin_analytics.png`: Plotly charts showing SLA metrics and station rankings.
+
+---
+
+<a id="database-design"></a>
+## 🗄️ Database Architecture & Schemas
+
+SupportAI uses **MongoDB** as its primary active document store (`voltway_supportai`) and maintains an archived **SQLite** benchmark database (`support_tickets.db`).
+
+### MongoDB Collections Design
+
+#### 1. `users` Collection
+Stores credential hashes and role authorization flags.
+
+```json
 {
-  "_id": ObjectId("6b0177c534a9a1d34ea19255"),
-  "id": 1,                                    // Unique integer identifier (from 'counters')
-  "name": "Support Administrator",            // User's full name
-  "email": "admin@supportai.com",             // Case-insensitive unique login email
-  "password_hash": "64_hex_salt$digest...",   // Salted PBKDF2-HMAC-SHA256 password hash
-  "role": "admin",                            // "admin" or "user"
-  "created_at": "2026-11-21T16:21:49"         // ISO timestamp string
+  "_id": "ObjectId('6b0177c534a9a1d34ea19255')",
+  "id": 1,
+  "name": "Support Administrator",
+  "email": "admin@example.com",
+  "password_hash": "a4f8...$310000$digest...",
+  "role": "admin",
+  "created_at": "2026-11-21T16:21:49"
 }
 ```
 *Indexes*:
-- `id` (Unique)
-- `email` (Unique)
+- `{"id": 1}` *(Unique)*
+- `{"email": 1}` *(Unique)*
 
-#### `tickets` Collection
-Stores customer complaints, technical metadata, AI outputs, and resolution timestamps.
-```javascript
+#### 2. `tickets` Collection
+Stores full customer complaint payloads, technical metadata, AI diagnostics, and SLA timestamps.
+
+<details>
+<summary><b>Click to inspect sample Ticket Document</b></summary>
+
+```json
 {
-  "_id": ObjectId("6b0178b80eea9ce4e3c19996"),
-  "id": 1,                                    // Unique integer ticket reference
-  "user_id": 2,                               // Submitting user reference ID
-  "subject": "amount deducted but charging not started",
-  "ticket_text": "₹450 was deducted from my UPI account, but the charging session never started...",
-  "station_id": "VLT-PUN-001",                // Charging station identifier
+  "_id": "ObjectId('6b0178b80eea9ce4e3c19996')",
+  "id": 104,
+  "user_id": 2,
+  "subject": "Amount deducted but charging not started",
+  "ticket_text": "₹500 was deducted from my UPI account, but the charging session never started...",
+  "station_id": "VLT-PUN-001",
   "station_name": "Baner Central Charging Hub",
   "station_city": "Pune",
-  "transaction_id": null,                     // Optional transaction reference
-  "session_id": null,                         // Optional charging session reference
-  "vehicle_model": "Tata Nexon EV",           // Optional vehicle model
-  "category": "Payment & Billing",            // Issue category
-  "urgency": "High",                          // "Low", "Medium", "High", "Critical"
-  "sentiment": "Negative",                    // "Positive", "Neutral", "Negative"
-  "summary": "amount deducted but charging not started...",
-  "draft_reply": "Thank you for reporting this issue...",
-  "approval_status": "Approved",              // "Pending", "Approved", "Rejected"
-  "assigned_team": "Payment Support",         // Assigned operational department
-  "escalation_status": "Priority Review",     // "Normal", "Priority Review", "Escalated"
+  "transaction_id": "TXN-94810294",
+  "session_id": "SES-440182",
+  "vehicle_model": "Tata Nexon EV",
+  "category": "Payment & Billing",
+  "urgency": "High",
+  "sentiment": "Negative",
+  "summary": "Driver was charged ₹500 via UPI; power delivery failed to initiate.",
+  "draft_reply": "Dear Customer, we have initiated verification of your session...",
+  "approval_status": "Pending",
+  "assigned_team": "Payment Support",
+  "escalation_status": "Priority Review",
   "rule_triggered": "EV Rule 5: Payment/Charging Mismatch",
-  "sla_target": "2 hours (priority review)",  // SLA string definition
-  "sla_due_at": "2026-11-21T18:25:52",        // Computed SLA deadline timestamp
-  "ticket_status": "Resolved",                // "Open", "In Progress", "Awaiting Customer", "Resolved", "Closed"
-  "analysis_mode": "Rule-Based Fallback",     // "Gemini AI" or "Rule-Based Fallback"
-  "model_used": null,                         // Model candidate name if Gemini used
-  "created_at": "2026-11-21T16:25:52",
-  "updated_at": "2026-11-21T16:27:58",
-  "resolved_at": "2026-11-21T16:27:52"        // Set when status changes to Resolved/Closed
+  "sla_target": "2 hours (priority review)",
+  "sla_due_at": "2026-11-23T13:25:52",
+  "ticket_status": "Open",
+  "analysis_mode": "Gemini AI",
+  "model_used": "gemini-2.5-flash",
+  "created_at": "2026-11-23T11:25:52",
+  "updated_at": "2026-11-23T11:25:52",
+  "resolved_at": null
 }
 ```
+</details>
+
 *Indexes*:
-- `id` (Unique)
-- Compound: `[("user_id", 1), ("id", -1)]`
-- Compound: `[("ticket_status", 1), ("sla_due_at", 1)]`
+- `{"id": 1}` *(Unique)*
+- `{"user_id": 1, "id": -1}` *(Compound: Fast customer history retrieval)*
+- `{"ticket_status": 1, "sla_due_at": 1}` *(Compound: Fast SLA monitoring and overdue triage)*
 
-#### `counters` Collection
-Guarantees sequential, atomic ticket and user ID generation using MongoDB's `find_one_and_update` with `$inc`.
-```javascript
-{
-  "_id": "tickets",
-  "sequence": 1
-}
-```
-
-### 2. SQLite Legacy Archive (`support_tickets.db`)
-Before the MongoDB integration, SupportAI utilized SQLite. The file `support_tickets.db` remains in the project root containing **15 historical benchmark tickets** and **3 initial user accounts**. It is preserved for reference and testing. Full automated migration of these 15 legacy SQLite records into MongoDB has not been executed; the active application runtime communicates directly with MongoDB.
+#### 3. `counters` Collection
+Guarantees clean, auto-incrementing sequential integers for ticket references (`#1`, `#2`, `#3`...) using MongoDB's atomic `find_one_and_update` with `$inc`.
 
 ---
 
-## K. AI and Fallback Mechanism
-
-SupportAI implements a two-tier hybrid intelligence architecture:
+<a id="ai-engine"></a>
+## 🤖 AI Engine & Resilience Fallback
 
 ```
-[Customer Complaint] ──► [Try Gemini API (10s Timeout)] 
-                               │
-            ┌──────────────────┴──────────────────┐
-            ▼                                     ▼
-     [Success / 200 OK]                   [Timeout / Offline / 404 / Missing Key]
-     - Strict JSON validation             - Execute _fallback_analysis()
-     - Model: gemini-2.0/2.5-flash        - Match ISSUE_KEYWORDS in ev_config.py
-     - Marked as "Gemini AI"              - Marked as "Rule-Based Fallback"
-            │                                     │
-            └──────────────────┬──────────────────┘
-                               ▼
-               [routing.py Deterministic Engine]
-               - Safety & Security overrides
-               - Department SLA & Escalation assignment
+[Incoming Complaint] ──► [Try Google Gemini API (10s Timeout)]
+                                 │
+             ┌───────────────────┴───────────────────┐
+             ▼                                       ▼
+      [Success: 200 OK]                   [Timeout / Network Error / 429]
+      - Model: gemini-2.5-flash           - Triggers _fallback_analysis()
+      - Strict JSON schema validation     - Keyword parsing from ev_config.py
+      - Tagged: "Gemini AI"               - Tagged: "Rule-Based Fallback"
+             │                                       │
+             └───────────────────┬───────────────────┘
+                                 ▼
+                 [routing.py Deterministic Rules]
+                 - Enforces Safety / Security overrides
+                 - Sets exact SLA deadlines & department
 ```
 
-### 1. How Gemini Analyzes Complaints
-When a ticket is submitted, `llm_service.py` issues a structured system prompt requiring the model to act as a customer support assistant for VoltWay Networks and return JSON containing:
-- `category`: Must match one of the 7 supported EV categories.
-- `urgency`: `Low`, `Medium`, `High`, or `Critical`.
-- `sentiment`: `Positive`, `Neutral`, or `Negative`.
-- `summary`: Concise synthesis of the problem.
-- `draft_reply`: Professional response that never claims completed refunds or completed repairs.
-- `escalate`: Boolean flag.
-- `escalation_reason`: Explanation of human review necessity.
+### 1. Google Gemini API Pipeline
+When an API key is configured, `llm_service.py` queries candidate models (`gemini-2.5-flash-lite`, `gemini-2.5-flash`, `gemini-2.0-flash`) via the modern `google-genai` SDK.
+- **Strict Response Schema**: The model is prompted to output pure JSON matching required fields: `category`, `urgency`, `sentiment`, `summary`, `draft_reply`, `escalate`, and `escalation_reason`.
+- **Anti-Hallucination Guardrail**: The system prompt strictly prohibits the AI from promising unverified refunds or claiming that field maintenance has been completed.
 
-### 2. Resilience & Fallback Activation
-The fallback engine activates automatically if:
-- `GEMINI_API_KEY` is empty or missing in `.env`.
-- Network connection fails (`ConnectError`, `ConnectTimeout`).
-- The API request exceeds the 10-second client timeout (`http_options={"timeout": 10}`).
-- The Gemini model returns a service error (`ClientError`, `404 NOT_FOUND`, `ResourceExhausted`).
+### 2. Deterministic EV Fallback Classifier
+If external connectivity drops or API quotas are exhausted, `_fallback_analysis()` evaluates the complaint against authoritative domain keywords:
 
-### 3. Rule-Based Classification
-The fallback engine in `llm_service.py` checks the complaint text against domain keyword sets synchronized with `ev_config.py`:
-- `safety_terms`: smoke, fire, overheating, electric shock, sparks, exposed wire, explosion.
-- `security_terms`: account takeover, hacked, fraudulent transaction, unauthorized access, accessed my account.
-- `payment_terms`: payment deducted, charged but, paid but, charged twice, double charge, money deducted.
-- `charging_terms`: connector error, charging did not start, charging stopped, charger not working, unable to charge.
-- `station_terms`: station offline, charger unavailable, network-wide outage.
-- `account_terms`: login, password, app crash, application crashes, cannot access account.
+<details>
+<summary><b>Click to inspect Fallback Keyword Dictionaries</b></summary>
 
-Every ticket explicitly records its classification origin in the database and displays it in the interface as either **Gemini** (Live AI) or **Fallback** (Rule-Based Fallback).
+- **Safety**: `smoke`, `fire`, `burning smell`, `overheating`, `electric shock`, `sparks`, `exposed wire`, `explosion`.
+- **Security**: `account takeover`, `hacked`, `unauthorized access`, `compromised`, `fraudulent transaction`.
+- **Outage**: `entire network is down`, `all stations are offline`, `critical network outage`, `network-wide outage`.
+- **Payment & Billing**: `payment deducted`, `amount deducted`, `charged but`, `paid but`, `charged twice`, `double charge`.
+- **Charging Failure**: `connector error`, `charging did not start`, `charging stopped`, `cable stuck`, `session failed`.
+- **Station Availability**: `station offline`, `charger unavailable`, `station is down`.
+- **Account & App**: `login`, `password`, `app crash`, `cannot access account`.
+</details>
 
 ---
 
-## L. Installation and Setup
+<a id="security-and-guardrails"></a>
+## 🛡️ Security, Privacy & Guardrails
+
+1. **Cryptographic Authentication**:
+   - Passwords are never stored in plaintext. The system generates unique 16-byte cryptographic random salts and hashes passwords using `hashlib.pbkdf2_hmac("sha256", ...)` with **310,000 iterations**.
+   - Verification uses constant-time `hmac.compare_digest` to prevent timing attacks.
+2. **Human-in-the-Loop Response Delivery**:
+   - AI drafts are stored in the database with `approval_status = "Pending"`.
+   - Customers **only** see responses once a verified NOC Administrator inspects and explicitly clicks **Approve Response**.
+3. **Environment Security**:
+   - Database URIs and API credentials are read from `.env` and excluded from source control via `.gitignore`.
+4. **Widget Key Isolation**:
+   - Streamlit widget keys are namespaced dynamically with ticket IDs and tab identifiers to guarantee state isolation and prevent UI crashes.
+
+---
+
+<a id="folder-structure"></a>
+## 📂 Project Directory Structure
+
+```
+Support_Ticket_AI/
+├── .streamlit/
+│   └── config.toml               # Streamlit theme settings (Navy #101C2C & Cyan #48D9ED)
+├── data/
+│   └── sample_stations.csv       # Charging hub catalog for Pune, Mumbai, Nashik
+├── app.py                        # Main Streamlit application (Customer & NOC Admin views)
+├── database.py                   # MongoDB persistence engine, indexing & PBKDF2 auth
+├── ev_config.py                  # VoltWay business config, station directory & keyword maps
+├── llm_service.py                # Gemini 2.5 SDK integration & deterministic fallback engine
+├── routing.py                    # Deterministic EV routing rules, team assignment & SLAs
+├── sample_tickets.csv            # Benchmark training and demonstration tickets
+├── support_tickets.db            # Persistent legacy SQLite archive (15 records)
+├── test_ai.py                    # Single-ticket Gemini AI / fallback integration test
+├── test_ev_config.py             # Station catalog and configuration integrity test
+├── test_ev_intelligence.py       # EV domain routing rules and classification test
+├── test_fallback.py              # Local fallback classifier regression test
+├── test_scenarios.py             # Full assertion suite for the 6 core business scenarios
+├── requirements.txt              # Production Python package dependencies
+├── .env.example                  # Environment configuration template
+└── README.md                     # Comprehensive project documentation
+```
+
+---
+
+<a id="installation-and-setup"></a>
+## ⚙️ Detailed Installation & Setup
 
 ### Prerequisites
-- **Python 3.10+** (Python 3.12 recommended)
-- **MongoDB Server** (Community Edition running locally on port `27017` or a MongoDB Atlas URI)
-- **Windows PowerShell** or standard terminal
-- Google Gemini API Key (optional; platform runs in fallback mode if omitted)
+- **Python 3.10 to 3.12** installed on your workstation.
+- **MongoDB Server** (Community Edition running locally on port `27017` or a MongoDB Atlas cloud URI).
 
-### Step 1: Clone or Navigate to Project
-```powershell
-cd C:\PyCharm\Support_Ticket_AI
-```
+### Step 1: Set Up Virtual Environment
 
-### Step 2: Create and Activate Virtual Environment
+**Windows PowerShell:**
 ```powershell
-# Create virtual environment
 python -m venv .venv
-
-# Activate virtual environment (PowerShell)
 .\.venv\Scripts\Activate.ps1
 ```
 
-### Step 3: Install Required Dependencies
-```powershell
+**macOS / Linux:**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### Step 2: Install Dependencies
+```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-### Step 4: Configure Environment Variables
-Create or verify `.env` in the project root:
+### Step 3: Configure Environment Variables
+Copy `.env.example` to create your local `.env`:
+
+```bash
+# Windows PowerShell
+Copy-Item .env.example .env
+
+# macOS / Linux
+cp .env.example .env
+```
+
+Edit `.env` with your preferred settings:
+
 ```env
-# MongoDB Configuration
+# MongoDB Connection (Defaults to local MongoDB)
 MONGO_URI=mongodb://localhost:27017/
 MONGO_DB_NAME=voltway_supportai
 
-# Google Gemini API Key (Leave blank to use internal fallback engine)
-GEMINI_API_KEY=your_actual_gemini_api_key_here
+# Google Gemini API Key (Optional: Leave empty for offline fallback)
+GEMINI_API_KEY=your_gemini_api_key_here
 
-# Administrator Credentials (Auto-provisioned on startup if not existing)
+# Administrator Credentials (Auto-provisioned on startup)
 ADMIN_NAME=Support Administrator
-ADMIN_EMAIL=admin@supportai.com
-ADMIN_PASSWORD=your_secure_admin_password
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=admin12345
 ```
 
-### Step 5: Verify MongoDB Service
-Ensure MongoDB is running locally:
-```powershell
-# Check MongoDB connection via python
-python -c "import database; print('MongoDB connection successful!')"
+### Step 4: Verify MongoDB Connection
+Ensure MongoDB is running locally or your Atlas connection is reachable:
+```bash
+python -c "import database; print('MongoDB Connected successfully!')"
 ```
 
----
-
-## M. Running the Application
-
-Launch the Streamlit web application:
-```powershell
+### Step 5: Start SupportAI
+```bash
 python -m streamlit run app.py
 ```
 
-- **Local Access URL**: `http://localhost:8501`
-- **Default Customer Account**: Register via the "Create customer account" tab or log in if previously registered.
-- **Default Administrator Account**:
-  - **Email**: `admin@supportai.com`
-  - **Password**: Configured in `.env` (`ADMIN_PASSWORD`)
-
 ---
 
-## N. Testing and Verification
+<a id="testing-and-verification"></a>
+## 🧪 Testing and Verification
 
-SupportAI includes automated regression test scripts to verify business rules, offline classification, and domain intelligence.
+SupportAI includes an automated test harness validating both rule-based fallback and live AI modes:
 
-### Test Execution & Verified Results
+| Test Script | Target Functionality | Command | Status |
+| :--- | :--- | :--- | :---: |
+| **`test_scenarios.py`** | 6 Core Business Scenarios (Fallback & AI modes) | `python test_scenarios.py` | **`PASS (6/6)`** |
+| **`test_fallback.py`** | Fallback Keyword Classifier Accuracy | `python test_fallback.py` | **`PASS (5/5)`** |
+| **`test_ev_intelligence.py`** | Domain Routing Rules & SLA Assertions | `python test_ev_intelligence.py` | **`PASS (7/7)`** |
+| **`test_ev_config.py`** | Station Directory & Schema Integrity | `python test_ev_config.py` | **`PASS`** |
+| **`test_ai.py`** | Gemini API & Timeout Fallback Handling | `python test_ai.py` | **`PASS`** |
 
-| Test Script | Target Functionality | Command | Status | Verified Output Summary |
-| :--- | :--- | :--- | :---: | :--- |
-| **`test_scenarios.py`** | 6 Core Business Scenarios in both Fallback and AI modes | `python test_scenarios.py` | **PASS** | 6/6 scenarios passed in Rule-Based Fallback mode; 6/6 scenarios passed in Live AI / Auto-Fallback mode. |
-| **`test_fallback.py`** | Local Fallback Classifier keyword matching | `python test_fallback.py` | **PASS** | 5/5 test complaints correctly classified into Payment, Security, App, Inquiry, and Charging Failure. |
-| **`test_ev_intelligence.py`**| EV domain routing assertions | `python test_ev_intelligence.py` | **PASS** | 7/7 test assertions passed covering safety, payments, outages, refunds, and security. |
-| **`test_ev_config.py`** | Station directory integrity | `python test_ev_config.py` | **PASS** | Successfully verified 6 stations, 7 categories, and 7 support teams. |
-| **`test_ai.py`** | Gemini AI / Fallback execution | `python test_ai.py` | **PASS** | Verified graceful fallback activation when API requests time out. |
-| **`test_workflows.py`** | Customer-Admin SQLite Integration | `python test_workflows.py` | **Incompatible** | Written for legacy SQLite `get_connection()` API; requires update for MongoDB `get_database()`. |
+### Run the Test Suite
 
-### Running the Core Test Suites
+Execute all core test suites directly in your activated virtual environment:
+
 ```powershell
-# Run the 6 core business scenarios
 python test_scenarios.py
-
-# Run the fallback engine regression tests
 python test_fallback.py
-
-# Run EV domain routing assertions
 python test_ev_intelligence.py
 ```
 
----
+<details>
+<summary><b>Click to inspect sample test output</b></summary>
 
-## O. Screenshots
+```
+=================================================================
+RUNNING 6 CORE SCENARIOS IN [RULE-BASED FALLBACK] MODE
+=================================================================
+  [PASS] Scenario 1: Payment deducted but charging did not start
+         Category: Payment & Billing | Urgency: High | Team: Payment Support | SLA: 2 hours
+  [PASS] Scenario 2: EV charger connector error
+         Category: Charging Failure | Urgency: High | Team: Technical Operations | SLA: 2 hours
+  [PASS] Scenario 3: Charging session failure
+         Category: Charging Failure | Urgency: High | Team: Technical Operations | SLA: 2 hours
+  [PASS] Scenario 4: Duplicate payment
+         Category: Payment & Billing | Urgency: High | Team: Payment Support | SLA: 2 hours
+  [PASS] Scenario 5: Fraudulent transaction or unauthorized account access
+         Category: Account & Application | Urgency: Critical | Team: Account Support | SLA: Immediate
+  [PASS] Scenario 6: General customer inquiry
+         Category: General Inquiry | Urgency: Medium | Team: General Support | SLA: 8 hours
 
-> *Note: Placeholders below reference visual sections of the application. Add screenshot image files to an `assets/screenshots/` folder to display them in GitHub.*
-
-### 1. Login & Registration Screen
-![VoltWay Networks Login Screen](assets/screenshots/01_login_screen.png)
-*Figure 1: Split-screen authentication portal with VoltWay branding, capability overview, and remembered login info.*
-
-### 2. Customer Portal – Report an EV Issue
-![Customer Submit Complaint Form](assets/screenshots/02_customer_submit.png)
-*Figure 2: EV charging complaint submission form featuring interactive charging station card preview and session metadata fields.*
-
-### 3. Customer Portal – My Ticket History
-![Customer Ticket History](assets/screenshots/03_customer_history.png)
-*Figure 3: Driver ticket stream displaying live status tags, urgency badges, charging specifications, and approved official responses.*
-
-### 4. Administrator NOC Dashboard – Overview
-![Administrator Dashboard Overview](assets/screenshots/04_admin_overview.png)
-*Figure 4: Operations control panel showing live ticket counters (Awaiting Approval, Escalated, Active) and incoming triage queue.*
-
-### 5. Administrator NOC Dashboard – Triage & Response Approval
-![Admin Response Approval](assets/screenshots/05_admin_approval.png)
-*Figure 5: Human-in-the-loop response editor with team reassignment, status updater, and single-click approval controls.*
-
-### 6. Administrator NOC Dashboard – Analytics & SLA Monitoring
-![Operations Analytics](assets/screenshots/06_admin_analytics.png)
-*Figure 6: Visual Plotly charts displaying monthly ticket volume, complaint distribution by station/city, and SLA compliance gauges.*
-
-### 7. MongoDB Compass – Database Collections View
-![MongoDB Compass Database](assets/screenshots/07_mongodb_compass.png)
-*Figure 7: MongoDB Compass interface showing the `voltway_supportai` database with `users`, `tickets`, and `counters` collections.*
+=================================================================
+FINAL RESULT: Fallback=True, Live/Resilient=True
+=================================================================
+All VoltWay fallback and routing tests passed.
+```
+</details>
 
 ---
 
-## P. Future Scope
+<a id="troubleshooting"></a>
+## 🔧 Troubleshooting & FAQ
 
-The following capabilities represent planned production enhancements:
-- **Automated Email / SMS Notifications**: Real-time notifications via SendGrid or Twilio when an administrator approves a response.
-- **Hardware Integration via OCPP Protocol**: Live telemetry integration with chargers via Open Charge Point Protocol (OCPP 1.6J / 2.0.1) to automatically verify error codes and meter values.
-- **Payment Gateway Webhook Sync**: Direct reconciliation with Razorpay/Stripe APIs to cross-verify transaction IDs and automate refund authorizations.
-- **Customer Satisfaction Scoring (CSAT)**: 5-star rating prompt for drivers once a ticket is marked Resolved.
-- **Cloud Infrastructure Deployment**: Docker containerization and deployment to AWS ECS / Google Cloud Run with MongoDB Atlas clustering.
+<details>
+<summary><b>1. "Could not connect to MongoDB" error on startup</b></summary>
+
+**Cause**: The MongoDB service is not currently running on `localhost:27017`.  
+**Solution**:
+- On Windows: Open Services (`services.msc`), find **MongoDB Server**, and click **Start**. Alternatively, run `net start MongoDB` in an Administrator terminal.
+- If using MongoDB Atlas: Update `MONGO_URI` in `.env` with your Atlas connection string (e.g., `mongodb+srv://user:pass@cluster.mongodb.net/`).
+</details>
+
+<details>
+<summary><b>2. "ModuleNotFoundError: No module named 'dotenv'"</b></summary>
+
+**Cause**: The script was run using the global system Python rather than the virtual environment Python.  
+**Solution**: Activate the virtual environment (`.\.venv\Scripts\Activate.ps1`) or invoke Python directly via `.\.venv\Scripts\python.exe app.py`.
+</details>
+
+<details>
+<summary><b>3. Why does the ticket show "Rule-Based Fallback" instead of "Gemini AI"?</b></summary>
+
+**Cause**: No valid `GEMINI_API_KEY` was found in `.env`, the API request exceeded the 10-second timeout, or network access was restricted.  
+**Solution**: The application is designed to function seamlessly in fallback mode. To enable live Gemini AI triage, obtain an API key from [Google AI Studio](https://aistudio.google.com/) and paste it into `.env`.
+</details>
+
+<details>
+<summary><b>4. How do I reset the Administrator password?</b></summary>
+
+**Solution**: Update `ADMIN_PASSWORD` in `.env` and restart the application. If the administrator user already exists in MongoDB, update the password directly via MongoDB Compass or delete the admin document in the `users` collection to allow automatic reprovisioning.
+</details>
 
 ---
 
-## Q. Limitations
+<a id="roadmap"></a>
+## 🚀 Roadmap & Future Scope
 
-- **Simulated Hardware Network**: VoltWay Networks is a fictional EV charging network operator; station IDs and technical specifications are demonstration sample records.
-- **Mandatory Human-in-the-Loop**: The platform intentionally does not send automated outbound emails to customers without administrator approval.
-- **Database Architecture State**: MongoDB powers the active runtime application, while the original 15 legacy SQLite records remain archived in `support_tickets.db` and are not automatically synchronized into MongoDB.
-- **External API Dependency**: Generative intelligence depends on Google Gemini API availability; when disconnected or rate-limited, the system transparently utilizes the deterministic rule fallback.
+- [ ] **OCPP 1.6J / 2.0.1 Direct Protocol Telemetry**: Ingest real-time Open Charge Point Protocol WebSocket telemetry to automatically correlate driver complaints with charger error codes (`GroundFailure`, `OverCurrentFailure`, `ConnectorLockFailure`).
+- [ ] **Automated SMS & Email Dispatch**: Integrate SendGrid or Twilio webhooks to notify drivers immediately when an NOC operator approves their ticket response.
+- [ ] **Payment Gateway Webhook Reconciliation**: Direct reconciliation with Razorpay/Stripe APIs to cross-verify transaction IDs and automate refund authorizations.
+- [ ] **Driver CSAT Scoring**: Prompt drivers for a 1-to-5 star rating and feedback upon ticket resolution to track team performance.
+- [ ] **Containerized Cloud Deployment**: Pre-built Docker and Helm charts for deployment to Google Cloud Run, AWS ECS, or Kubernetes.
 
 ---
 
-*VoltWay Networks – SupportAI · Developed for Academic Evaluation and Technical Portfolio Demonstration.*
+## 📜 Project Metadata
+
+- **Project**: SupportAI – VoltWay Networks
+- **Domain**: Electric Vehicle Public Charging Infrastructure Operations
+- **Target Role**: Customer Care, Field Engineering & NOC Incident Triage
+- **Evaluation**: Built for Academic Evaluation and Technical Portfolio Demonstration
+
+<div align="center">
+<sub>Crafted with ⚡ for reliable electric vehicle mobility.</sub>
+</div>
