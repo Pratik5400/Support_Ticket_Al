@@ -2,9 +2,32 @@
 
 import json
 import os
-from dotenv import load_dotenv
+import sys
+from pathlib import Path
 
-load_dotenv()
+# Automatically ensure local virtualenv packages are discoverable
+_venv_site = Path(__file__).resolve().parent / ".venv" / "Lib" / "site-packages"
+if _venv_site.is_dir() and str(_venv_site) not in sys.path:
+    sys.path.insert(0, str(_venv_site))
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    def load_dotenv(dotenv_path=".env", override=False):
+        p = Path(dotenv_path)
+        if not p.is_absolute():
+            p = Path(__file__).resolve().parent / dotenv_path
+        if p.is_file():
+            with open(p, "r", encoding="utf-8") as f:
+                for line in f:
+                    s = line.strip()
+                    if s and not s.startswith("#") and "=" in s:
+                        k, v = s.split("=", 1)
+                        k, v = k.strip(), v.strip().strip("'\"")
+                        if k and (override or k not in os.environ):
+                            os.environ[k] = v
+    load_dotenv()
 API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 try:

@@ -8,13 +8,36 @@ from ev_config import (
     SAMPLE_STATIONS,
 )
 import json
+import os
+import sys
 from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from dotenv import load_dotenv
 
-load_dotenv()
+# Automatically ensure local virtualenv packages are discoverable
+_venv_site = Path(__file__).resolve().parent / ".venv" / "Lib" / "site-packages"
+if _venv_site.is_dir() and str(_venv_site) not in sys.path:
+    sys.path.insert(0, str(_venv_site))
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    def load_dotenv(dotenv_path=".env", override=False):
+        p = Path(dotenv_path)
+        if not p.is_absolute():
+            p = Path(__file__).resolve().parent / dotenv_path
+        if p.is_file():
+            with open(p, "r", encoding="utf-8") as f:
+                for line in f:
+                    s = line.strip()
+                    if s and not s.startswith("#") and "=" in s:
+                        k, v = s.split("=", 1)
+                        k, v = k.strip(), v.strip().strip("'\"")
+                        if k and (override or k not in os.environ):
+                            os.environ[k] = v
+    load_dotenv()
 
 from database import (
     authenticate_user, create_user, get_all_tickets, get_user_tickets,
@@ -22,6 +45,8 @@ from database import (
 )
 from llm_service import API_KEY, analyze_ticket
 from routing import route_ticket
+from theme import apply_theme, style_chart
+from cursor_bg import inject_cursor_background
 
 st.set_page_config(
     page_title="VoltWay Networks · SupportAI",
@@ -30,216 +55,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for the VoltWay Networks dark navy & electric cyan theme
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
-
-html, body, [class*="css"], .stApp {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-    background-color: #101C2C !important;
-    color: #F5F8FC !important;
-}
-
-/* Header & Toolbars */
-[data-testid="stHeader"] {
-    background-color: #101C2C !important;
-    border-bottom: 1px solid #1E334A !important;
-}
-[data-testid="stToolbar"] {
-    background-color: transparent !important;
-}
-
-.block-container {
-    padding-top: 1.5rem !important;
-    padding-bottom: 3rem !important;
-    max-width: 1400px !important;
-}
-
-/* Typography */
-h1, h2, h3, h4, h5, h6 {
-    color: #F5F8FC !important;
-    font-weight: 700 !important;
-    letter-spacing: -0.02em !important;
-}
-p, span, .stMarkdown, .stCaption {
-    color: #B8C9DC !important;
-}
-label, [data-testid="stWidgetLabel"] p {
-    font-size: 0.88rem !important;
-    font-weight: 600 !important;
-    color: #F5F8FC !important;
-}
-
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background-color: #17283B !important;
-    border-right: 1px solid #20344A !important;
-}
-[data-testid="stSidebar"] * {
-    color: #F5F8FC;
-}
-
-/* Form Inputs, Selectboxes & Textareas */
-.stTextInput input, .stTextArea textarea, [data-baseweb="select"] > div {
-    background-color: #17283B !important;
-    color: #F5F8FC !important;
-    border: 1px solid #2C4663 !important;
-    border-radius: 8px !important;
-    font-size: 0.92rem !important;
-    transition: all 0.2s ease-in-out !important;
-}
-.stTextInput input:focus, .stTextArea textarea:focus, [data-baseweb="select"] > div:focus-within {
-    border-color: #48D9ED !important;
-    box-shadow: 0 0 0 2px rgba(72, 217, 237, 0.2) !important;
-}
-.stTextInput input::placeholder, .stTextArea textarea::placeholder {
-    color: #7A93AF !important;
-}
-
-/* Tabs */
-.stTabs [data-baseweb="tab-list"] {
-    background-color: #17283B !important;
-    border: 1px solid #20344A !important;
-    border-radius: 10px !important;
-    padding: 4px !important;
-    gap: 4px !important;
-}
-.stTabs [data-baseweb="tab"] {
-    color: #B8C9DC !important;
-    font-weight: 600 !important;
-    padding: 8px 18px !important;
-    border-radius: 8px !important;
-    border: none !important;
-    transition: all 0.2s ease !important;
-}
-.stTabs [data-baseweb="tab"]:hover {
-    color: #48D9ED !important;
-}
-.stTabs [aria-selected="true"] {
-    background-color: #20344A !important;
-    color: #48D9ED !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25) !important;
-}
-
-/* Primary and Regular Buttons */
-.stButton > button, .stFormSubmitButton > button {
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    min-height: 42px !important;
-    font-size: 0.92rem !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    cursor: pointer !important;
-}
-/* Primary button styling */
-.stButton > button[kind="primary"], .stFormSubmitButton > button {
-    background: linear-gradient(135deg, #1fa2b4, #48D9ED) !important;
-    color: #0c1824 !important;
-    border: 0 !important;
-    font-weight: 700 !important;
-    box-shadow: 0 2px 10px rgba(72, 217, 237, 0.25) !important;
-}
-.stButton > button[kind="primary"]:hover, .stFormSubmitButton > button:hover {
-    background: linear-gradient(135deg, #48D9ED, #78ecfc) !important;
-    box-shadow: 0 4px 18px rgba(72, 217, 237, 0.45) !important;
-    transform: translateY(-1px) !important;
-}
-/* Secondary / default button */
-.stButton > button:not([kind="primary"]) {
-    background-color: #20344A !important;
-    color: #F5F8FC !important;
-    border: 1px solid #2C4663 !important;
-}
-.stButton > button:not([kind="primary"]):hover {
-    border-color: #48D9ED !important;
-    color: #48D9ED !important;
-    background-color: #263e58 !important;
-}
-
-/* Metric Cards */
-[data-testid="stMetric"] {
-    background-color: #20344A !important;
-    border: 1px solid #2C4663 !important;
-    border-radius: 10px !important;
-    padding: 16px 20px !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-}
-[data-testid="stMetric"] label {
-    color: #B8C9DC !important;
-    font-size: 0.82rem !important;
-    font-weight: 600 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.06em !important;
-}
-[data-testid="stMetricValue"] {
-    color: #F5F8FC !important;
-    font-weight: 700 !important;
-    font-size: 1.8rem !important;
-}
-
-/* Expanders */
-[data-testid="stExpander"] {
-    background-color: #17283B !important;
-    border: 1px solid #2C4663 !important;
-    border-radius: 10px !important;
-    margin-bottom: 12px !important;
-}
-[data-testid="stExpander"] summary {
-    color: #F5F8FC !important;
-    font-weight: 600 !important;
-    padding: 12px 16px !important;
-}
-[data-testid="stExpander"] summary:hover {
-    color: #48D9ED !important;
-}
-
-/* Alerts */
-[data-testid="stAlert"] {
-    border-radius: 8px !important;
-    background-color: #17283B !important;
-    border: 1px solid #2C4663 !important;
-}
-
-/* Horizontal Dividers */
-hr {
-    border-color: #20344A !important;
-    margin: 1.5rem 0 !important;
-}
-
-/* Dataframe & Tables */
-[data-testid="stDataFrame"] {
-    background-color: #17283B !important;
-    border: 1px solid #2C4663 !important;
-    border-radius: 10px !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-def style_chart(fig):
-    """Apply VoltWay Networks dark navy and cyan styling to Plotly figures."""
-    fig.update_layout(
-        template="plotly_dark",
-        paper_bgcolor="#20344A",
-        plot_bgcolor="#20344A",
-        font=dict(color="#F5F8FC", family="Inter, sans-serif"),
-        title_font=dict(color="#F5F8FC", size=14, family="Inter, sans-serif"),
-        legend=dict(font=dict(color="#B8C9DC")),
-        margin=dict(l=20, r=20, t=40, b=20),
-    )
-    fig.update_xaxes(
-        gridcolor="#2C4663",
-        linecolor="#2C4663",
-        tickfont=dict(color="#B8C9DC"),
-        title_font=dict(color="#B8C9DC")
-    )
-    fig.update_yaxes(
-        gridcolor="#2C4663",
-        linecolor="#2C4663",
-        tickfont=dict(color="#B8C9DC"),
-        title_font=dict(color="#B8C9DC")
-    )
-    return fig
+# Apply Google Antigravity visual theme and cursor background animation
+inject_cursor_background()
+apply_theme()
 
 
 REMEMBERED_LOGIN_FILE = Path(__file__).parent / ".remembered_login.json"
@@ -291,14 +109,14 @@ def login_screen():
     if "login_password_val" not in st.session_state:
         st.session_state["login_password_val"] = saved_password
 
-    # Brand banner
+    # Brand banner - Antigravity Glass Card with subtle gradient accent
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #17283B, #20344A); padding: 24px 32px; border-radius: 12px; border: 1px solid #2C4663; margin-bottom: 28px;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="background: rgba(72, 217, 237, 0.15); border: 1px solid #48D9ED; border-radius: 10px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 22px;">⚡</div>
+    <div style="background: rgba(255, 255, 255, 0.92); padding: 24px 32px; border-radius: 16px; border: 1px solid #E3E7EF; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03); margin-bottom: 28px; backdrop-filter: blur(10px);">
+        <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="background: linear-gradient(135deg, rgba(66, 133, 244, 0.12), rgba(245, 56, 160, 0.12)); border: 1px solid rgba(66, 133, 244, 0.25); border-radius: 999px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; font-size: 22px;">⚡</div>
             <div>
-                <div style="font-size: 1.45rem; font-weight: 800; color: #F5F8FC; letter-spacing: -0.02em;">VOLTWAY NETWORKS</div>
-                <div style="font-size: 0.82rem; font-weight: 600; color: #48D9ED; letter-spacing: 0.08em; text-transform: uppercase;">SupportAI · Customer Support & Network Operations Platform</div>
+                <div style="font-size: 1.45rem; font-weight: 800; color: #1F1F1F; letter-spacing: -0.02em;">VOLTWAY <span class="ag-gradient-text">NETWORKS</span></div>
+                <div style="font-size: 0.82rem; font-weight: 600; color: #1A73E8; letter-spacing: 0.06em; text-transform: uppercase;">SupportAI · Customer Support & Network Operations Platform</div>
             </div>
         </div>
     </div>
@@ -314,13 +132,13 @@ def login_screen():
         )
 
         st.markdown("""
-        <div style="background: #17283B; border: 1px solid #2C4663; border-radius: 10px; padding: 18px 20px; margin-top: 16px;">
-            <div style="font-weight: 700; color: #48D9ED; margin-bottom: 8px; font-size: 0.95rem;">⚡ Platform Capabilities</div>
-            <ul style="margin: 0; padding-left: 20px; color: #B8C9DC; font-size: 0.88rem; line-height: 1.7;">
-                <li><strong style="color: #F5F8FC;">Automated Triage:</strong> Fast charging failure, connector errors & payment mismatch diagnosis.</li>
-                <li><strong style="color: #F5F8FC;">Safety Prioritization:</strong> Immediate escalation for thermal, cable, or electrical hazards.</li>
-                <li><strong style="color: #F5F8FC;">Human-in-the-Loop:</strong> All customer responses verified and approved by operations engineers.</li>
-                <li><strong style="color: #F5F8FC;">SLA Assurance:</strong> Dedicated 2h/4h/8h resolution targets by department.</li>
+        <div style="background: rgba(248, 249, 252, 0.85); border: 1px solid #E3E7EF; border-radius: 14px; padding: 18px 22px; margin-top: 16px; backdrop-filter: blur(8px);">
+            <div style="font-weight: 700; color: #1A73E8; margin-bottom: 8px; font-size: 0.95rem;">⚡ Platform Capabilities</div>
+            <ul style="margin: 0; padding-left: 20px; color: #5F6368; font-size: 0.88rem; line-height: 1.7;">
+                <li><strong style="color: #1F1F1F;">Automated Triage:</strong> Fast charging failure, connector errors & payment mismatch diagnosis.</li>
+                <li><strong style="color: #1F1F1F;">Safety Prioritization:</strong> Immediate escalation for thermal, cable, or electrical hazards.</li>
+                <li><strong style="color: #1F1F1F;">Human-in-the-Loop:</strong> All customer responses verified and approved by operations engineers.</li>
+                <li><strong style="color: #1F1F1F;">SLA Assurance:</strong> Dedicated 2h/4h/8h resolution targets by department.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -403,23 +221,23 @@ def ticket_card(ticket, admin=False, key_suffix="default"):
     escalation = ticket.get("escalation_status", "Normal")
     mode = "Live AI" if ticket.get("analysis_mode") == "Gemini AI" else "Rule-Based Fallback"
 
-    # Color tokens for badges
+    # Color tokens for badges matching Google Antigravity design system
     status_colors = {
-        "Open": ("#48D9ED", "rgba(72, 217, 237, 0.12)"),
-        "In Progress": ("#FFB84D", "rgba(255, 184, 77, 0.12)"),
-        "Awaiting Customer": ("#78B5FF", "rgba(120, 181, 255, 0.12)"),
-        "Resolved": ("#42D99B", "rgba(66, 217, 155, 0.12)"),
-        "Closed": ("#B8C9DC", "rgba(184, 201, 220, 0.12)"),
+        "Open": ("#1A73E8", "rgba(26, 115, 232, 0.10)"),
+        "In Progress": ("#B06000", "rgba(251, 188, 4, 0.16)"),
+        "Awaiting Customer": ("#A142F4", "rgba(161, 66, 244, 0.12)"),
+        "Resolved": ("#1E8E3E", "rgba(52, 168, 83, 0.12)"),
+        "Closed": ("#5F6368", "rgba(95, 99, 104, 0.10)"),
     }
-    status_fg, status_bg = status_colors.get(status, ("#48D9ED", "rgba(72, 217, 237, 0.12)"))
+    status_fg, status_bg = status_colors.get(status, ("#1A73E8", "rgba(26, 115, 232, 0.10)"))
 
     urgency_colors = {
-        "Critical": ("#F06464", "rgba(240, 100, 100, 0.15)"),
-        "High": ("#FFB84D", "rgba(255, 184, 77, 0.15)"),
-        "Medium": ("#48D9ED", "rgba(72, 217, 237, 0.12)"),
-        "Low": ("#42D99B", "rgba(66, 217, 155, 0.12)"),
+        "Critical": ("#D93025", "rgba(234, 67, 53, 0.12)"),
+        "High": ("#E37400", "rgba(250, 123, 23, 0.12)"),
+        "Medium": ("#1A73E8", "rgba(26, 115, 232, 0.10)"),
+        "Low": ("#1E8E3E", "rgba(52, 168, 83, 0.12)"),
     }
-    urgency_fg, urgency_bg = urgency_colors.get(urgency, ("#48D9ED", "rgba(72, 217, 237, 0.12)"))
+    urgency_fg, urgency_bg = urgency_colors.get(urgency, ("#1A73E8", "rgba(26, 115, 232, 0.10)"))
 
     # Check for safety terms
     safety_terms = (
@@ -436,23 +254,23 @@ def ticket_card(ticket, admin=False, key_suffix="default"):
         or any(term in ticket_content for term in safety_terms)
     )
 
-    card_border = "#F06464" if is_safety_incident or escalation == "Escalated" else "#2C4663"
+    card_border = "#EA4335" if is_safety_incident or escalation == "Escalated" else "#E3E7EF"
 
     with st.container(border=True):
         # Header banner inside card
         st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #20344A; padding-bottom: 12px; margin-bottom: 14px;">
-            <div style="font-size: 1.15rem; font-weight: 700; color: #F5F8FC;">
-                <span style="color: #48D9ED; font-family: 'JetBrains Mono', monospace;">#{ticket_id}</span> · {ticket.get('subject') or 'Support request'}
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #EEF2F6; padding-bottom: 12px; margin-bottom: 14px;">
+            <div style="font-size: 1.15rem; font-weight: 700; color: #1F1F1F;">
+                <span style="color: #1A73E8; font-family: 'JetBrains Mono', monospace; font-weight: 700;">#{ticket_id}</span> · {ticket.get('subject') or 'Support request'}
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
-                <span style="background: {status_bg}; color: {status_fg}; border: 1px solid {status_fg}; padding: 3px 10px; border-radius: 6px; font-size: 0.76rem; font-weight: 700; text-transform: uppercase;">
+                <span style="background: {status_bg}; color: {status_fg}; border: 1px solid {status_fg}; padding: 3px 12px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; text-transform: uppercase;">
                     ● {status}
                 </span>
-                <span style="background: {urgency_bg}; color: {urgency_fg}; border: 1px solid {urgency_fg}; padding: 3px 10px; border-radius: 6px; font-size: 0.76rem; font-weight: 700; text-transform: uppercase;">
+                <span style="background: {urgency_bg}; color: {urgency_fg}; border: 1px solid {urgency_fg}; padding: 3px 12px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; text-transform: uppercase;">
                     {urgency}
                 </span>
-                <span style="background: #17283B; color: #B8C9DC; border: 1px solid #2C4663; padding: 3px 10px; border-radius: 6px; font-size: 0.76rem; font-weight: 600;">
+                <span style="background: #F8F9FC; color: #5F6368; border: 1px solid #E3E7EF; padding: 3px 12px; border-radius: 999px; font-size: 0.76rem; font-weight: 600;">
                     {mode}
                 </span>
             </div>
@@ -466,16 +284,16 @@ def ticket_card(ticket, admin=False, key_suffix="default"):
         d.metric("Assigned team", ticket.get("assigned_team", "General Support"))
 
         st.markdown(f"""
-        <div style="background: #17283B; border: 1px solid #2C4663; border-radius: 8px; padding: 12px 16px; margin: 12px 0;">
-            <div style="font-size: 0.78rem; font-weight: 700; color: #7A93AF; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Customer Reported Issue</div>
-            <div style="color: #F5F8FC; font-size: 0.92rem; line-height: 1.5;">{ticket.get('ticket_text', '')}</div>
+        <div style="background: #F8F9FC; border: 1px solid #E3E7EF; border-radius: 12px; padding: 14px 18px; margin: 12px 0;">
+            <div style="font-size: 0.78rem; font-weight: 700; color: #5F6368; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Customer Reported Issue</div>
+            <div style="color: #1F1F1F; font-size: 0.92rem; line-height: 1.6;">{ticket.get('ticket_text', '')}</div>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
-        <div style="background: rgba(72, 217, 237, 0.06); border: 1px solid rgba(72, 217, 237, 0.25); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px;">
-            <div style="font-size: 0.78rem; font-weight: 700; color: #48D9ED; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">⚡ AI Operational Summary</div>
-            <div style="color: #B8C9DC; font-size: 0.90rem; line-height: 1.5;">{ticket.get('summary', '') or 'Summary pending analysis.'}</div>
+        <div style="background: linear-gradient(135deg, rgba(66, 133, 244, 0.05), rgba(161, 66, 244, 0.05)); border: 1px solid rgba(66, 133, 244, 0.20); border-radius: 12px; padding: 14px 18px; margin-bottom: 12px;">
+            <div style="font-size: 0.78rem; font-weight: 700; color: #1A73E8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">⚡ AI Operational Summary</div>
+            <div style="color: #3C4043; font-size: 0.90rem; line-height: 1.6;">{ticket.get('summary', '') or 'Summary pending analysis.'}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -510,19 +328,19 @@ def ticket_card(ticket, admin=False, key_suffix="default"):
         # Support Response Presentation
         if admin:
             st.markdown("""
-            <div style="font-size: 0.85rem; font-weight: 700; color: #48D9ED; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 14px; margin-bottom: 6px;">
+            <div style="font-size: 0.85rem; font-weight: 700; color: #1A73E8; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 14px; margin-bottom: 6px;">
                 Suggested AI Customer Reply
             </div>
             """, unsafe_allow_html=True)
             st.info(ticket.get("draft_reply", "A support agent will review your request."))
         elif ticket.get("approval_status") == "Approved":
             st.markdown("""
-            <div style="background: rgba(66, 217, 155, 0.08); border: 1px solid #42D99B; border-radius: 8px; padding: 14px 18px; margin: 12px 0;">
+            <div style="background: rgba(52, 168, 83, 0.06); border: 1px solid rgba(52, 168, 83, 0.35); border-radius: 12px; padding: 16px 20px; margin: 12px 0;">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                    <span style="color: #42D99B; font-size: 1.1rem;">✓</span>
-                    <strong style="color: #42D99B; font-size: 0.88rem; text-transform: uppercase; letter-spacing: 0.06em;">Official VoltWay Support Response</strong>
+                    <span style="color: #1E8E3E; font-size: 1.1rem; font-weight: 700;">✓</span>
+                    <strong style="color: #1E8E3E; font-size: 0.88rem; text-transform: uppercase; letter-spacing: 0.06em;">Official VoltWay Support Response</strong>
                 </div>
-                <div style="color: #F5F8FC; font-size: 0.92rem; line-height: 1.55;">""" + str(ticket.get("draft_reply", "")) + """</div>
+                <div style="color: #1F1F1F; font-size: 0.92rem; line-height: 1.6;">""" + str(ticket.get("draft_reply", "")) + """</div>
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -586,13 +404,13 @@ def ticket_card(ticket, admin=False, key_suffix="default"):
 
 def customer_dashboard(user):
     st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #17283B, #20344A); padding: 22px 28px; border-radius: 12px; border: 1px solid #2C4663; margin-bottom: 24px;">
+    <div style="background: rgba(255, 255, 255, 0.92); padding: 22px 28px; border-radius: 16px; border: 1px solid #E3E7EF; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03); margin-bottom: 24px; backdrop-filter: blur(10px);">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
             <div>
-                <div style="font-size: 1.4rem; font-weight: 800; color: #F5F8FC;">Welcome back, {user['name']} 👋</div>
-                <div style="color: #B8C9DC; font-size: 0.9rem;">VoltWay Customer Support Hub · Public EV Charging Assistance</div>
+                <div style="font-size: 1.4rem; font-weight: 800; color: #1F1F1F;">Welcome back, {user['name']} 👋</div>
+                <div style="color: #5F6368; font-size: 0.9rem;">VoltWay Customer Support Hub · Public EV Charging Assistance</div>
             </div>
-            <div style="background: rgba(66, 217, 155, 0.12); border: 1px solid #42D99B; color: #42D99B; padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+            <div style="background: rgba(52, 168, 83, 0.10); border: 1px solid #34A853; color: #1E8E3E; padding: 6px 16px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 6px;">
                 <span style="font-size: 10px;">●</span> NETWORK OPERATIONAL
             </div>
         </div>
@@ -630,21 +448,21 @@ def customer_dashboard(user):
 
             # EV Station preview card
             is_dc = "DC" in station["charger_type"]
-            badge_color = "#48D9ED" if is_dc else "#42D99B"
-            badge_bg = "rgba(72, 217, 237, 0.12)" if is_dc else "rgba(66, 217, 155, 0.12)"
-            status_color = "#42D99B" if station["station_status"] == "Operational" else "#FFB84D"
+            badge_color = "#1A73E8" if is_dc else "#1E8E3E"
+            badge_bg = "rgba(26, 115, 232, 0.10)" if is_dc else "rgba(52, 168, 83, 0.10)"
+            status_color = "#1E8E3E" if station["station_status"] == "Operational" else "#E37400"
 
             st.markdown(f"""
-            <div style="background: #17283B; border: 1px solid #2C4663; border-radius: 8px; padding: 12px 18px; margin: 10px 0 16px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div style="background: #F8F9FC; border: 1px solid #E3E7EF; border-radius: 12px; padding: 14px 18px; margin: 10px 0 16px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <div>
-                    <div style="color: #F5F8FC; font-weight: 700; font-size: 0.95rem;">⚡ {station['station_name']}</div>
-                    <div style="color: #7A93AF; font-size: 0.82rem;">{station['area']}, {station['city']} · Station ID: <code style="color: #48D9ED;">{station['station_id']}</code></div>
+                    <div style="color: #1F1F1F; font-weight: 700; font-size: 0.95rem;">⚡ {station['station_name']}</div>
+                    <div style="color: #5F6368; font-size: 0.82rem;">{station['area']}, {station['city']} · Station ID: <code style="color: #1A73E8; background: #E8F0FE; padding: 2px 6px; border-radius: 4px;">{station['station_id']}</code></div>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    <span style="background: {badge_bg}; color: {badge_color}; border: 1px solid {badge_color}; padding: 3px 10px; border-radius: 6px; font-size: 0.76rem; font-weight: 700;">
+                    <span style="background: {badge_bg}; color: {badge_color}; border: 1px solid {badge_color}; padding: 3px 12px; border-radius: 999px; font-size: 0.76rem; font-weight: 700;">
                         {station['charger_type']}
                     </span>
-                    <span style="background: #20344A; color: #F5F8FC; border: 1px solid #2C4663; padding: 3px 10px; border-radius: 6px; font-size: 0.76rem; font-weight: 700;">
+                    <span style="background: #FFFFFF; color: #1F1F1F; border: 1px solid #E3E7EF; padding: 3px 12px; border-radius: 999px; font-size: 0.76rem; font-weight: 700;">
                         ⚡ {station['power_kw']} kW
                     </span>
                     <span style="color: {status_color}; font-size: 0.76rem; font-weight: 700;">
@@ -735,13 +553,13 @@ def customer_dashboard(user):
 
 def admin_dashboard(user):
     st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #17283B, #20344A); padding: 22px 28px; border-radius: 12px; border: 1px solid #2C4663; margin-bottom: 24px;">
+    <div style="background: rgba(255, 255, 255, 0.92); padding: 22px 28px; border-radius: 16px; border: 1px solid #E3E7EF; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03); margin-bottom: 24px; backdrop-filter: blur(10px);">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
             <div>
-                <div style="font-size: 1.4rem; font-weight: 800; color: #F5F8FC;">⚡ Network Operations Center (NOC)</div>
-                <div style="color: #B8C9DC; font-size: 0.9rem;">VoltWay Networks SupportAI Control Panel · Operator: <strong style="color: #48D9ED;">{user['name']}</strong></div>
+                <div style="font-size: 1.4rem; font-weight: 800; color: #1F1F1F;">⚡ Network Operations Center (NOC)</div>
+                <div style="color: #5F6368; font-size: 0.9rem;">VoltWay Networks SupportAI Control Panel · Operator: <strong style="color: #1A73E8;">{user['name']}</strong></div>
             </div>
-            <div style="background: rgba(72, 217, 237, 0.12); border: 1px solid #48D9ED; color: #48D9ED; padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 700;">
+            <div style="background: rgba(26, 115, 232, 0.10); border: 1px solid #1A73E8; color: #1A73E8; padding: 6px 16px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;">
                 ⚡ OPERATIONS LIVE
             </div>
         </div>
@@ -858,7 +676,7 @@ def admin_dashboard(user):
                     fig1 = px.line(
                         monthly, x="Month", y="Tickets", markers=True,
                         title="Monthly Ticket Volume",
-                        color_discrete_sequence=["#48D9ED"]
+                        color_discrete_sequence=["#1A73E8"]
                     )
                     st.plotly_chart(style_chart(fig1), use_container_width=True)
                 else:
@@ -874,7 +692,7 @@ def admin_dashboard(user):
                     fig2 = px.pie(
                         category_counts, names="Category", values="Tickets",
                         title="Complaints by Issue Category", hole=0.45,
-                        color_discrete_sequence=["#48D9ED", "#42D99B", "#FFB84D", "#F06464", "#78B5FF", "#B8C9DC", "#64748B"]
+                        color_discrete_sequence=["#1A73E8", "#A142F4", "#F538A0", "#34A853", "#FBBC04", "#4285F4", "#EA4335"]
                     )
                     st.plotly_chart(style_chart(fig2), use_container_width=True)
 
@@ -890,7 +708,7 @@ def admin_dashboard(user):
                 fig3 = px.bar(
                     station_counts, x="station_name", y="Tickets",
                     title="Complaints by Charging Station",
-                    color_discrete_sequence=["#48D9ED"]
+                    color_discrete_sequence=["#1A73E8"]
                 )
                 st.plotly_chart(style_chart(fig3), use_container_width=True)
 
@@ -904,7 +722,7 @@ def admin_dashboard(user):
                 fig4 = px.bar(
                     city_counts, x="station_city", y="Tickets",
                     title="Complaints by City",
-                    color_discrete_sequence=["#42D99B"]
+                    color_discrete_sequence=["#34A853"]
                 )
                 st.plotly_chart(style_chart(fig4), use_container_width=True)
 
@@ -920,7 +738,7 @@ def admin_dashboard(user):
                 fig5 = px.bar(
                     team_counts, x="assigned_team", y="Tickets",
                     title="Workload by Support Department",
-                    color_discrete_sequence=["#78B5FF"]
+                    color_discrete_sequence=["#A142F4"]
                 )
                 st.plotly_chart(style_chart(fig5), use_container_width=True)
 
@@ -934,7 +752,7 @@ def admin_dashboard(user):
                     urgency_counts, x="Urgency", y="Tickets",
                     title="Tickets by Urgency",
                     category_orders={"Urgency": urgency_order},
-                    color_discrete_sequence=["#FFB84D"]
+                    color_discrete_sequence=["#FA7B17"]
                 )
                 st.plotly_chart(style_chart(fig6), use_container_width=True)
 
@@ -976,7 +794,7 @@ def admin_dashboard(user):
                     fig7 = px.pie(
                         sla_chart, names="SLA result", values="Tickets",
                         title="Resolution SLA Compliance", hole=0.45,
-                        color_discrete_sequence=["#42D99B", "#F06464"]
+                        color_discrete_sequence=["#34A853", "#EA4335"]
                     )
                     st.plotly_chart(style_chart(fig7), use_container_width=True)
 
@@ -1031,11 +849,11 @@ def main():
     with st.sidebar:
         # Branding
         st.markdown("""
-        <div style="padding: 10px 0 16px 0; border-bottom: 1px solid #20344A; margin-bottom: 16px;">
-            <div style="font-size: 1.25rem; font-weight: 800; color: #48D9ED; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px;">
-                <span>⚡</span> VOLTWAY
+        <div style="padding: 10px 0 16px 0; border-bottom: 1px solid #E3E7EF; margin-bottom: 16px;">
+            <div style="font-size: 1.25rem; font-weight: 800; color: #1F1F1F; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px;">
+                <span>⚡</span> VOLTWAY <span class="ag-gradient-text" style="font-size: 1.15rem;">AI</span>
             </div>
-            <div style="font-size: 0.72rem; font-weight: 700; color: #7A93AF; letter-spacing: 0.12em; text-transform: uppercase;">
+            <div style="font-size: 0.72rem; font-weight: 700; color: #5F6368; letter-spacing: 0.10em; text-transform: uppercase;">
                 SUPPORTAI · EV CHARGING OPS
             </div>
         </div>
@@ -1043,16 +861,16 @@ def main():
 
         # Profile card
         role_label = "⚡ NOC Administrator" if is_admin else "🚘 EV Driver Account"
-        role_badge_color = "#48D9ED" if is_admin else "#42D99B"
-        role_badge_bg = "rgba(72, 217, 237, 0.12)" if is_admin else "rgba(66, 217, 155, 0.12)"
+        role_badge_color = "#1A73E8" if is_admin else "#1E8E3E"
+        role_badge_bg = "rgba(26, 115, 232, 0.10)" if is_admin else "rgba(52, 168, 83, 0.10)"
 
         st.markdown(f"""
-        <div style="background: #20344A; border: 1px solid #2C4663; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
-            <div style="font-weight: 700; color: #F5F8FC; font-size: 0.98rem; margin-bottom: 4px;">{user['name']}</div>
-            <div style="display: inline-block; background: {role_badge_bg}; color: {role_badge_color}; border: 1px solid {role_badge_color}; border-radius: 4px; padding: 2px 8px; font-size: 0.74rem; font-weight: 700; text-transform: uppercase;">
+        <div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);">
+            <div style="font-weight: 700; color: #1F1F1F; font-size: 0.98rem; margin-bottom: 4px;">{user['name']}</div>
+            <div style="display: inline-block; background: {role_badge_bg}; color: {role_badge_color}; border: 1px solid {role_badge_color}; border-radius: 999px; padding: 2px 10px; font-size: 0.74rem; font-weight: 700; text-transform: uppercase;">
                 {role_label}
             </div>
-            <div style="color: #7A93AF; font-size: 0.78rem; margin-top: 6px;">{user.get('email', '')}</div>
+            <div style="color: #5F6368; font-size: 0.78rem; margin-top: 6px;">{user.get('email', '')}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1060,32 +878,32 @@ def main():
             st.session_state.pop("user", None)
             st.rerun()
 
-        st.markdown("<hr style='border-color: #20344A; margin: 18px 0;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border-color: #E3E7EF; margin: 18px 0;'>", unsafe_allow_html=True)
 
         # AI Status Card
         st.markdown("""
-        <div style="font-size: 0.78rem; font-weight: 700; color: #7A93AF; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+        <div style="font-size: 0.78rem; font-weight: 700; color: #5F6368; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
             AI Service Engine
         </div>
         """, unsafe_allow_html=True)
         if API_KEY:
             st.markdown("""
-            <div style="background: rgba(66, 217, 155, 0.10); border: 1px solid #42D99B; border-radius: 8px; padding: 10px 12px; font-size: 0.80rem; color: #42D99B; font-weight: 600;">
+            <div style="background: rgba(52, 168, 83, 0.08); border: 1px solid #34A853; border-radius: 12px; padding: 12px 14px; font-size: 0.80rem; color: #1E8E3E; font-weight: 600;">
                 ● Gemini AI Engine Configured<br>
-                <span style="color: #B8C9DC; font-weight: 400; font-size: 0.75rem;">Deterministic fallback standby active</span>
+                <span style="color: #5F6368; font-weight: 400; font-size: 0.75rem;">Deterministic fallback standby active</span>
             </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown("""
-            <div style="background: rgba(255, 184, 77, 0.10); border: 1px solid #FFB84D; border-radius: 8px; padding: 10px 12px; font-size: 0.80rem; color: #FFB84D; font-weight: 600;">
+            <div style="background: rgba(251, 188, 4, 0.12); border: 1px solid #FBBC04; border-radius: 12px; padding: 12px 14px; font-size: 0.80rem; color: #B06000; font-weight: 600;">
                 ● Internal Fallback Engine Active<br>
-                <span style="color: #B8C9DC; font-weight: 400; font-size: 0.75rem;">Offline EV rule classifier running</span>
+                <span style="color: #5F6368; font-weight: 400; font-size: 0.75rem;">Offline EV rule classifier running</span>
             </div>
             """, unsafe_allow_html=True)
 
         st.markdown("""
-        <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid #20344A; font-size: 0.72rem; color: #7A93AF; text-align: center;">
-            VoltWay Networks · Version 2.2<br>Fictional EV Charging Demonstration
+        <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid #E3E7EF; font-size: 0.72rem; color: #5F6368; text-align: center;">
+            VoltWay Networks · Version 2.2<br>Google Antigravity Design System
         </div>
         """, unsafe_allow_html=True)
 
