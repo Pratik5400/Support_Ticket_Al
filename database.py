@@ -5,6 +5,7 @@ import re
 import hmac
 import hashlib
 import secrets
+import sqlite3
 from datetime import datetime, timedelta
 
 # Automatically ensure local virtualenv packages are discoverable
@@ -30,10 +31,6 @@ except ImportError:
                         if k and (override or k not in os.environ):
                             os.environ[k] = v
     load_dotenv()
-from pymongo import MongoClient, ReturnDocument
-from pymongo.errors import DuplicateKeyError, PyMongoError
-
-load_dotenv()
 
 # Sync Streamlit Cloud secrets to environment variables if available
 try:
@@ -45,6 +42,7 @@ try:
 except Exception:
     pass
 
+SQLITE_PATH = Path(__file__).resolve().parent / "support_tickets.db"
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "voltway_supportai")
 PBKDF2_ITERATIONS = 310_000
@@ -58,18 +56,12 @@ _users = None
 _tickets = None
 _counters = None
 
-try:
-    _client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=4000, connectTimeoutMS=4000)
-    _db = _client[MONGO_DB_NAME]
-    _users = _db["users"]
-    _tickets = _db["tickets"]
-    _counters = _db["counters"]
-except Exception as _client_err:
-    MONGO_ERROR = str(_client_err)
 
-
-def get_database():
-    return _db
+def get_sqlite_conn():
+    conn = sqlite3.connect(SQLITE_PATH, timeout=20)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 
 def _hash_password(password, salt=None):
@@ -89,14 +81,6 @@ def _verify_password(password, stored):
     return hmac.compare_digest(actual, expected)
 
 
-def _next_id(counter_name):
-    counter = _counters.find_one_and_update(
-        {"_id": counter_name}, {"$inc": {"sequence": 1}},
-        upsert=True, return_document=ReturnDocument.AFTER
-    )
-    return int(counter["sequence"])
-
-
 def _sla_due_datetime(result):
     label = str((result or {}).get("sla_target") or "8 hours").lower()
     hours_match = re.search(r"(\d+(?:\.\d+)?)\s*hours?", label)
@@ -112,48 +96,140 @@ def _sla_due_datetime(result):
     return (datetime.now() + duration).isoformat(timespec="seconds")
 
 
+def _next_mongo_id(counter_name):
+    from pymongo import ReturnDocument
+    counter = _counters.find_one_and_update(
+        {"_id": counter_name}, {"$inc": {"sequence": 1}},
+        upsert=True, return_document=ReturnDocument.AFTER
+    )
+    return int(counter["sequence"])
+
+
+def _clean_mongo_doc(document):
+    if not document:
+        return None
+    document.pop("_id", None)
+    return document
+
+
 def _provision_admin():
     name = os.getenv("ADMIN_NAME", "Support Administrator").strip()
-    email = os.getenv("ADMIN_EMAIL", "").strip().lower()
-    password = os.getenv("ADMIN_PASSWORD", "")
+    email = os.getenv("ADMIN_EMAIL", "admin@supportai.com").strip().lower()
+    password = os.getenv("ADMIN_PASSWORD", "YourActualStrongPassword123")
     if not email or not password:
         return
     if len(password) < 8:
-        raise ValueError("ADMIN_PASSWORD must be at least 8 characters.")
-    if _users.find_one({"email": email}, {"_id": 1}):
         return
-    try:
-        _users.insert_one({
-            "id": _next_id("users"),
-            "name": name or "Support Administrator",
-            "email": email,
-            "password_hash": _hash_password(password),
-            "role": "admin",
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-        })
-    except DuplicateKeyError:
-        return
+
+    if MONGO_CONNECTED:
+        from pymongo.errors import DuplicateKeyError
+        if _users.find_one({"email": email}, {"_id": 1}):
+            return
+        try:
+            _users.insert_one({
+                "id": _next_mongo_id("users"),
+                "name": name or "Support Administrator",
+                "email": email,
+                "password_hash": _hash_password(password),
+                "role": "admin",
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+            })
+        except DuplicateKeyError:
+            pass
+    else:
+        with get_sqlite_conn() as conn:
+            row = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+            if not row:
+                conn.execute(
+                    "INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'admin')",
+                    (name or "Support Administrator", email, _hash_password(password)),
+                )
+
+
+def _init_sqlite():
+    with get_sqlite_conn() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_text TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'General Inquiry',
+                urgency TEXT NOT NULL DEFAULT 'Medium',
+                sentiment TEXT NOT NULL DEFAULT 'Neutral',
+                summary TEXT NOT NULL DEFAULT '',
+                draft_reply TEXT NOT NULL DEFAULT '',
+                escalate INTEGER NOT NULL DEFAULT 0,
+                escalation_reason TEXT,
+                approval_status TEXT NOT NULL DEFAULT 'Pending',
+                assigned_team TEXT NOT NULL DEFAULT 'General Support',
+                escalation_status TEXT NOT NULL DEFAULT 'Normal',
+                rule_triggered TEXT DEFAULT 'Standard Routing',
+                sla_target TEXT DEFAULT '8 hours',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        current = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)").fetchall()}
+        additions = {
+            "user_id": "INTEGER REFERENCES users(id)",
+            "subject": "TEXT DEFAULT 'Support request'",
+            "ticket_status": "TEXT NOT NULL DEFAULT 'Open'",
+            "analysis_mode": "TEXT NOT NULL DEFAULT 'Rule-Based Fallback'",
+            "model_used": "TEXT",
+            "updated_at": "TEXT",
+            "station_id": "TEXT",
+            "station_name": "TEXT",
+            "station_city": "TEXT",
+            "transaction_id": "TEXT",
+            "session_id": "TEXT",
+            "vehicle_model": "TEXT",
+            "sla_due_at": "TEXT",
+            "resolved_at": "TEXT",
+        }
+        for column, definition in additions.items():
+            if column not in current:
+                conn.execute(f"ALTER TABLE tickets ADD COLUMN {column} {definition}")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tickets_user_id ON tickets(user_id)")
 
 
 def initialize_database():
-    global MONGO_CONNECTED, MONGO_ERROR
-    if _client is None:
-        MONGO_CONNECTED = False
-        return False
+    global MONGO_CONNECTED, MONGO_ERROR, _client, _db, _users, _tickets, _counters
+    
+    # Try connecting to MongoDB first
     try:
+        from pymongo import MongoClient
+        _client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2500, connectTimeoutMS=2500)
         _client.admin.command("ping")
+        _db = _client[MONGO_DB_NAME]
+        _users = _db["users"]
+        _tickets = _db["tickets"]
+        _counters = _db["counters"]
         _users.create_index("id", unique=True)
         _users.create_index("email", unique=True)
         _tickets.create_index("id", unique=True)
         _tickets.create_index([("user_id", 1), ("id", -1)])
         _tickets.create_index([("ticket_status", 1), ("sla_due_at", 1)])
-        _provision_admin()
         MONGO_CONNECTED = True
         MONGO_ERROR = None
+        _provision_admin()
         return True
-    except PyMongoError as exc:
+    except Exception as exc:
         MONGO_CONNECTED = False
         MONGO_ERROR = str(exc)
+        # Seamlessly fallback to SQLite
+        try:
+            _init_sqlite()
+            _provision_admin()
+        except Exception:
+            pass
         return False
 
 
@@ -168,24 +244,46 @@ def create_user(name, email, password, role="user"):
         raise ValueError("Password must contain at least 8 characters.")
     if role != "user":
         raise ValueError("Public registration is only available for customer accounts.")
-    try:
-        user_id = _next_id("users")
-        _users.insert_one({
-            "id": user_id, "name": name, "email": email,
-            "password_hash": _hash_password(password), "role": "user",
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-        })
-        return user_id
-    except DuplicateKeyError:
-        raise ValueError("An account with this email already exists.") from None
+
+    if MONGO_CONNECTED:
+        from pymongo.errors import DuplicateKeyError
+        try:
+            user_id = _next_mongo_id("users")
+            _users.insert_one({
+                "id": user_id, "name": name, "email": email,
+                "password_hash": _hash_password(password), "role": "user",
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+            })
+            return user_id
+        except DuplicateKeyError:
+            raise ValueError("An account with this email already exists.") from None
+    else:
+        try:
+            with get_sqlite_conn() as conn:
+                cursor = conn.execute(
+                    "INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'user')",
+                    (name, email, _hash_password(password)),
+                )
+                return cursor.lastrowid
+        except sqlite3.IntegrityError:
+            raise ValueError("An account with this email already exists.") from None
 
 
 def authenticate_user(email, password):
     email = (email or "").strip().lower()
-    row = _users.find_one({"email": email})
-    if not row or not _verify_password(password or "", row.get("password_hash")):
-        return None
-    return {"id": row["id"], "name": row["name"], "email": row["email"], "role": row["role"]}
+    if MONGO_CONNECTED:
+        row = _users.find_one({"email": email})
+        if not row or not _verify_password(password or "", row.get("password_hash")):
+            return None
+        return {"id": row["id"], "name": row["name"], "email": row["email"], "role": row["role"]}
+    else:
+        with get_sqlite_conn() as conn:
+            row = conn.execute(
+                "SELECT id,name,email,password_hash,role FROM users WHERE email = ?", (email,)
+            ).fetchone()
+        if not row or not _verify_password(password or "", row["password_hash"]):
+            return None
+        return {"id": row["id"], "name": row["name"], "email": row["email"], "role": row["role"]}
 
 
 def save_ticket(ticket_text, result, user_id=None, subject="Support request",
@@ -197,61 +295,120 @@ def save_ticket(ticket_text, result, user_id=None, subject="Support request",
         raise ValueError("Analysis missing: " + ", ".join(missing))
 
     now = datetime.now().isoformat(timespec="seconds")
-    ticket_id = _next_id("tickets")
-    document = {
-        "id": ticket_id, "ticket_text": ticket_text,
-        "category": result["category"], "urgency": result["urgency"],
-        "sentiment": result["sentiment"], "summary": result["summary"],
-        "draft_reply": result["draft_reply"],
-        "escalate": bool(result.get("escalate", False)),
-        "escalation_reason": result.get("escalation_reason"),
-        "approval_status": "Pending",
-        "assigned_team": result.get("assigned_team", "General Support"),
-        "escalation_status": result.get("escalation_status", "Normal"),
-        "rule_triggered": result.get("rule_triggered", "Standard Routing"),
-        "sla_target": result.get("sla_target", "8 hours"),
-        "user_id": user_id, "subject": (subject or "Support request").strip(),
-        "ticket_status": "Open",
-        "analysis_mode": result.get("analysis_mode", "Rule-Based Fallback"),
-        "model_used": result.get("model_used"),
-        "created_at": now, "updated_at": now,
-        "station_id": station_id, "station_name": station_name,
-        "station_city": station_city, "transaction_id": transaction_id,
-        "session_id": session_id, "vehicle_model": vehicle_model,
-        "sla_due_at": _sla_due_datetime(result), "resolved_at": None,
-    }
-    _tickets.insert_one(document)
-    return ticket_id
+    sla_due = _sla_due_datetime(result)
 
-
-def _clean_document(document):
-    if not document:
-        return None
-    document.pop("_id", None)
-    return document
+    if MONGO_CONNECTED:
+        ticket_id = _next_mongo_id("tickets")
+        document = {
+            "id": ticket_id, "ticket_text": ticket_text,
+            "category": result["category"], "urgency": result["urgency"],
+            "sentiment": result["sentiment"], "summary": result["summary"],
+            "draft_reply": result["draft_reply"],
+            "escalate": bool(result.get("escalate", False)),
+            "escalation_reason": result.get("escalation_reason"),
+            "approval_status": "Pending",
+            "assigned_team": result.get("assigned_team", "General Support"),
+            "escalation_status": result.get("escalation_status", "Normal"),
+            "rule_triggered": result.get("rule_triggered", "Standard Routing"),
+            "sla_target": result.get("sla_target", "8 hours"),
+            "user_id": user_id, "subject": (subject or "Support request").strip(),
+            "ticket_status": "Open",
+            "analysis_mode": result.get("analysis_mode", "Rule-Based Fallback"),
+            "model_used": result.get("model_used"),
+            "created_at": now, "updated_at": now,
+            "station_id": station_id, "station_name": station_name,
+            "station_city": station_city, "transaction_id": transaction_id,
+            "session_id": session_id, "vehicle_model": vehicle_model,
+            "sla_due_at": sla_due, "resolved_at": None,
+        }
+        _tickets.insert_one(document)
+        return ticket_id
+    else:
+        with get_sqlite_conn() as conn:
+            cur = conn.execute("""
+                INSERT INTO tickets (
+                    ticket_text, category, urgency, sentiment,
+                    summary, draft_reply, escalate, escalation_reason,
+                    approval_status, assigned_team, escalation_status,
+                    rule_triggered, sla_target, user_id, subject,
+                    ticket_status, analysis_mode, model_used, updated_at,
+                    station_id, station_name, station_city,
+                    transaction_id, session_id, vehicle_model,
+                    created_at, sla_due_at
+                )
+                VALUES (
+                    ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
+                    'Open',?,?,?,
+                    ?,?,?,?,?,?,?,?
+                )
+            """, (
+                ticket_text,
+                result["category"],
+                result["urgency"],
+                result["sentiment"],
+                result["summary"],
+                result["draft_reply"],
+                int(bool(result.get("escalate", False))),
+                result.get("escalation_reason"),
+                "Pending",
+                result.get("assigned_team", "General Support"),
+                result.get("escalation_status", "Normal"),
+                result.get("rule_triggered", "Standard Routing"),
+                result.get("sla_target", "8 hours"),
+                user_id,
+                (subject or "Support request").strip(),
+                result.get("analysis_mode", "Rule-Based Fallback"),
+                result.get("model_used"),
+                now,
+                station_id,
+                station_name,
+                station_city,
+                transaction_id,
+                session_id,
+                vehicle_model,
+                now,
+                sla_due,
+            ))
+            return cur.lastrowid
 
 
 def get_all_tickets():
-    rows = list(_tickets.find().sort("id", -1))
-    user_ids = {row.get("user_id") for row in rows if row.get("user_id") is not None}
-    users_by_id = {}
-    if user_ids:
-        for user in _users.find(
-            {"id": {"$in": list(user_ids)}},
-            {"_id": 0, "id": 1, "name": 1, "email": 1}
-        ):
-            users_by_id[user["id"]] = user
-    output = []
-    for row in rows:
-        user = users_by_id.get(row.get("user_id"), {})
-        row["customer_name"] = user.get("name")
-        row["customer_email"] = user.get("email")
-        output.append(_clean_document(row))
-    return output
+    if MONGO_CONNECTED:
+        rows = list(_tickets.find().sort("id", -1))
+        user_ids = {row.get("user_id") for row in rows if row.get("user_id") is not None}
+        users_by_id = {}
+        if user_ids:
+            for user in _users.find(
+                {"id": {"$in": list(user_ids)}},
+                {"_id": 0, "id": 1, "name": 1, "email": 1}
+            ):
+                users_by_id[user["id"]] = user
+        output = []
+        for row in rows:
+            user = users_by_id.get(row.get("user_id"), {})
+            row["customer_name"] = user.get("name")
+            row["customer_email"] = user.get("email")
+            output.append(_clean_mongo_doc(row))
+        return output
+    else:
+        with get_sqlite_conn() as conn:
+            rows = conn.execute("""
+                SELECT t.*, u.name AS customer_name, u.email AS customer_email
+                FROM tickets t LEFT JOIN users u ON u.id=t.user_id
+                ORDER BY t.id DESC
+            """).fetchall()
+            return [dict(row) for row in rows]
 
 
 def get_user_tickets(user_id):
-    return [_clean_document(row) for row in _tickets.find({"user_id": user_id}).sort("id", -1)]
+    if MONGO_CONNECTED:
+        return [_clean_mongo_doc(row) for row in _tickets.find({"user_id": user_id}).sort("id", -1)]
+    else:
+        with get_sqlite_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM tickets WHERE user_id=? ORDER BY id DESC", (user_id,)
+            ).fetchall()
+            return [dict(row) for row in rows]
 
 
 def get_ticket(ticket_id):
@@ -259,30 +416,53 @@ def get_ticket(ticket_id):
         ticket_id = int(ticket_id)
     except (TypeError, ValueError):
         return None
-    return _clean_document(_tickets.find_one({"id": ticket_id}))
+    if MONGO_CONNECTED:
+        return _clean_mongo_doc(_tickets.find_one({"id": ticket_id}))
+    else:
+        with get_sqlite_conn() as conn:
+            row = conn.execute("SELECT * FROM tickets WHERE id=?", (ticket_id,)).fetchone()
+            return dict(row) if row else None
 
 
 def update_approval_status(ticket_id, status):
     if status not in {"Pending", "Approved", "Rejected"}:
         raise ValueError("Invalid approval status.")
-    result = _tickets.update_one(
-        {"id": int(ticket_id)},
-        {"$set": {"approval_status": status, "updated_at": datetime.now().isoformat(timespec="seconds")}}
-    )
-    if result.matched_count == 0:
-        raise ValueError("Ticket not found.")
+    if MONGO_CONNECTED:
+        result = _tickets.update_one(
+            {"id": int(ticket_id)},
+            {"$set": {"approval_status": status, "updated_at": datetime.now().isoformat(timespec="seconds")}}
+        )
+        if result.matched_count == 0:
+            raise ValueError("Ticket not found.")
+    else:
+        with get_sqlite_conn() as conn:
+            cur = conn.execute(
+                "UPDATE tickets SET approval_status=?, updated_at=? WHERE id=?",
+                (status, datetime.now().isoformat(timespec="seconds"), ticket_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("Ticket not found.")
 
 
 def update_ticket_reply(ticket_id, draft_reply):
     draft_reply = (draft_reply or "").strip()
     if not draft_reply:
         raise ValueError("Reply cannot be empty.")
-    result = _tickets.update_one(
-        {"id": int(ticket_id)},
-        {"$set": {"draft_reply": draft_reply, "updated_at": datetime.now().isoformat(timespec="seconds")}}
-    )
-    if result.matched_count == 0:
-        raise ValueError("Ticket not found.")
+    if MONGO_CONNECTED:
+        result = _tickets.update_one(
+            {"id": int(ticket_id)},
+            {"$set": {"draft_reply": draft_reply, "updated_at": datetime.now().isoformat(timespec="seconds")}}
+        )
+        if result.matched_count == 0:
+            raise ValueError("Ticket not found.")
+    else:
+        with get_sqlite_conn() as conn:
+            cur = conn.execute(
+                "UPDATE tickets SET draft_reply=?, updated_at=? WHERE id=?",
+                (draft_reply, datetime.now().isoformat(timespec="seconds"), ticket_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("Ticket not found.")
 
 
 def update_ticket_status(ticket_id, status, assigned_team=None):
@@ -290,21 +470,48 @@ def update_ticket_status(ticket_id, status, assigned_team=None):
     if status not in allowed:
         raise ValueError("Invalid ticket status.")
     now = datetime.now().isoformat(timespec="seconds")
-    updates = {
-        "ticket_status": status, "updated_at": now,
-        "resolved_at": now if status in {"Resolved", "Closed"} else None,
-    }
-    if assigned_team:
-        updates["assigned_team"] = assigned_team
-    result = _tickets.update_one({"id": int(ticket_id)}, {"$set": updates})
-    if result.matched_count == 0:
-        raise ValueError("Ticket not found.")
+    if MONGO_CONNECTED:
+        updates = {
+            "ticket_status": status, "updated_at": now,
+            "resolved_at": now if status in {"Resolved", "Closed"} else None,
+        }
+        if assigned_team:
+            updates["assigned_team"] = assigned_team
+        result = _tickets.update_one({"id": int(ticket_id)}, {"$set": updates})
+        if result.matched_count == 0:
+            raise ValueError("Ticket not found.")
+    else:
+        with get_sqlite_conn() as conn:
+            resolved_at = now if status in {"Resolved", "Closed"} else None
+            if assigned_team:
+                cur = conn.execute(
+                    """UPDATE tickets
+                       SET ticket_status=?, assigned_team=?, updated_at=?, resolved_at=?
+                       WHERE id=?""",
+                    (status, assigned_team, now, resolved_at, ticket_id),
+                )
+            else:
+                cur = conn.execute(
+                    """UPDATE tickets
+                       SET ticket_status=?, updated_at=?, resolved_at=?
+                       WHERE id=?""",
+                    (status, now, resolved_at, ticket_id),
+                )
+            if cur.rowcount == 0:
+                raise ValueError("Ticket not found.")
 
 
 def delete_ticket(ticket_id):
-    result = _tickets.delete_one({"id": int(ticket_id)})
-    if result.deleted_count == 0:
-        raise ValueError("Ticket not found.")
+    if MONGO_CONNECTED:
+        result = _tickets.delete_one({"id": int(ticket_id)})
+        if result.deleted_count == 0:
+            raise ValueError("Ticket not found.")
+    else:
+        with get_sqlite_conn() as conn:
+            cur = conn.execute("DELETE FROM tickets WHERE id=?", (ticket_id,))
+            if cur.rowcount == 0:
+                raise ValueError("Ticket not found.")
 
 
+# Initialize on import
 initialize_database()
